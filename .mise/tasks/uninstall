@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+#MISE description="Remove a tool's shim and deregister it"
+#USAGE arg "<name>" help="Command name to remove"
+set -eo pipefail
+
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$REPO_DIR/lib/shim.sh"
+
+NAME="${usage_name}"
+
+if [ "$NAME" = "shiv" ]; then
+  echo "Can't uninstall shiv — that would be pulling your own plug"
+  exit 1
+fi
+
+# Remove shim
+if [ -f "$SHIV_BIN_DIR/$NAME" ]; then
+  rm "$SHIV_BIN_DIR/$NAME"
+  echo "Removed shim: $SHIV_BIN_DIR/$NAME"
+else
+  echo "No shim found for $NAME"
+fi
+
+# Deregister
+shiv_unregister "$NAME"
+echo "Unregistered: $NAME"

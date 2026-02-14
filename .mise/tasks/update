@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+#MISE description="Refresh all shims from the registry"
+set -eo pipefail
+
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$REPO_DIR/lib/shim.sh"
+
+shiv_init_registry
+
+COUNT=$(jq 'length' "$SHIV_REGISTRY")
+
+if [ "$COUNT" -eq 0 ]; then
+  echo "No tools registered."
+  exit 0
+fi
+
+echo "Refreshing $COUNT shim(s)..."
+
+jq -r 'to_entries[] | "\(.key) \(.value)"' "$SHIV_REGISTRY" | while read -r name repo; do
+  if [ -d "$repo" ]; then
+    shiv_create_shim "$name" "$repo"
+    echo "  ✓ $name → $repo"
+  else
+    echo "  ✗ $name — repo not found at $repo (skipped)"
+  fi
+done
+
+echo "Done."

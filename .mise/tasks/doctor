@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+#MISE description="Check health of all managed tools"
+set -eo pipefail
+
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$REPO_DIR/lib/shim.sh"
+
+shiv_init_registry
+
+COUNT=$(jq 'length' "$SHIV_REGISTRY")
+
+if [ "$COUNT" -eq 0 ]; then
+  echo "No tools registered."
+  exit 0
+fi
+
+echo "Checking $COUNT tool(s)..."
+echo ""
+
+HEALTHY=0
+PROBLEMS=0
+
+jq -r 'to_entries[] | "\(.key) \(.value)"' "$SHIV_REGISTRY" | while read -r name repo; do
+  issues=""
+
+  # Check repo exists
+  if [ ! -d "$repo" ]; then
+    issues="${issues}  repo not found at $repo\n"
+  fi
+
+  # Check shim exists
+  if [ ! -f "$SHIV_BIN_DIR/$name" ]; then
+    issues="${issues}  shim missing at $SHIV_BIN_DIR/$name\n"
+  elif ! grep -q "# managed by shiv" "$SHIV_BIN_DIR/$name" 2>/dev/null; then
+    issues="${issues}  shim exists but not managed by shiv\n"
+  fi
+
+  # Check shim points to right repo
+  if [ -f "$SHIV_BIN_DIR/$name" ]; then
+    shim_repo=$(grep '^REPO=' "$SHIV_BIN_DIR/$name" 2>/dev/null | cut -d'"' -f2)
+    if [ -n "$shim_repo" ] && [ "$shim_repo" != "$repo" ]; then
+      issues="${issues}  shim points to $shim_repo but registry says $repo\n"
+    fi
+  fi
+
+  if [ -z "$issues" ]; then
+    echo "  ✓ $name"
+  else
+    echo "  ✗ $name"
+    printf "$issues"
+  fi
+done
+
+echo ""
+echo "Run 'shiv install <name> <path>' to fix any issues."

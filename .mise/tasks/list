@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+#MISE description="Show all managed tools"
+set -eo pipefail
+
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$REPO_DIR/lib/shim.sh"
+
+shiv_init_registry
+
+COUNT=$(jq 'length' "$SHIV_REGISTRY")
+
+if [ "$COUNT" -eq 0 ]; then
+  echo "No tools registered. Use 'shiv install <name> <path>' to add one."
+  exit 0
+fi
+
+echo "Managed tools ($COUNT):"
+echo ""
+printf "  %-15s %s\n" "COMMAND" "REPO"
+printf "  %-15s %s\n" "-------" "----"
+jq -r 'to_entries[] | "\(.key) \(.value)"' "$SHIV_REGISTRY" | while read -r name repo; do
+  printf "  %-15s %s\n" "$name" "$repo"
+done

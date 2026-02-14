@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+#MISE description="Output shell configuration for all managed tools (use with eval)"
+set -eo pipefail
+
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$REPO_DIR/lib/shim.sh"
+
+# Self-hosting: ensure shiv's own shim exists and is registered
+shiv_create_shim "shiv" "$REPO_DIR"
+shiv_register "shiv" "$REPO_DIR"
+
+# Ensure ~/.local/bin is on PATH (skip if already there)
+case ":$PATH:" in
+  *":$SHIV_BIN_DIR:"*) ;;
+  *) echo "export PATH=\"$SHIV_BIN_DIR:\$PATH\"" ;;
+esac
+
+# Output aliases for all registered tools
+shiv_init_registry
+jq -r 'to_entries[] | "\(.key) \(.value)"' "$SHIV_REGISTRY" | while read -r name repo; do
+  shiv_shell_config "$name" "$repo"
+done

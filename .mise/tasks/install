@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+#MISE description="Register a tool and create its shim"
+#USAGE arg "<name>" help="Command name (e.g., shimmer, wp, frames)"
+#USAGE arg "<path>" help="Path to the tool's repo"
+set -eo pipefail
+
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$REPO_DIR/lib/shim.sh"
+
+NAME="${usage_name}"
+TOOL_PATH="$(cd "$usage_path" && pwd)"
+
+if [ ! -f "$TOOL_PATH/mise.toml" ]; then
+  echo "Warning: no mise.toml found at $TOOL_PATH"
+  echo "Are you sure this is a mise-based project?"
+  read -r -p "Continue? [y/N] " confirm
+  [ "$confirm" = "y" ] || exit 1
+fi
+
+shiv_create_shim "$NAME" "$TOOL_PATH"
+shiv_register "$NAME" "$TOOL_PATH"
+
+echo "Installed: $NAME → $TOOL_PATH"
+echo "Shim: $SHIV_BIN_DIR/$NAME"
+echo ""
+echo "If you haven't already, add to your shell config:"
+echo "  eval \"\$(mise -C $REPO_DIR run -q shell)\""
