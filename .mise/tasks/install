@@ -1,27 +1,62 @@
 #!/usr/bin/env bash
-#MISE description="Register a tool and create its shim"
-#USAGE arg "<name>" help="Command name (e.g., shimmer, wp, frames)"
-#USAGE arg "<path>" help="Path to the tool's repo"
+#MISE description="Install a tool — from the package index or a local path"
+#USAGE arg "<name>" help="Command name (e.g., shimmer, frames) or name and path"
+#USAGE arg "[path]" help="Local path to repo (optional — if omitted, clones from package index)"
 set -eo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "$REPO_DIR/lib/shim.sh"
 
 NAME="${usage_name}"
-TOOL_PATH="$(cd "$usage_path" && pwd)"
+LOCAL_PATH="${usage_path:-}"
+
+if [ -n "$LOCAL_PATH" ]; then
+  # Local install — point at an existing repo
+  TOOL_PATH="$(cd "$LOCAL_PATH" && pwd)"
+else
+  # Package install — look up in sources and clone
+  SOURCES="$REPO_DIR/sources.json"
+  if [ ! -f "$SOURCES" ]; then
+    echo "Error: no sources.json found" >&2
+    exit 1
+  fi
+
+  GH_REPO=$(jq -r --arg n "$NAME" '.[$n] // empty' "$SOURCES")
+  if [ -z "$GH_REPO" ]; then
+    echo "Error: '$NAME' not found in package index" >&2
+    echo ""
+    echo "Available packages:"
+    jq -r 'to_entries[] | "  \(.key) → \(.value)"' "$SOURCES"
+    exit 1
+  fi
+
+  TOOL_PATH="$SHIV_PACKAGES_DIR/$NAME"
+
+  if [ -d "$TOOL_PATH" ]; then
+    echo "Already cloned: $TOOL_PATH"
+    echo "Pulling latest..."
+    git -C "$TOOL_PATH" pull --ff-only 2>&1 | sed 's/^/  /'
+  else
+    echo "Cloning $GH_REPO..."
+    mkdir -p "$SHIV_PACKAGES_DIR"
+    gh repo clone "$GH_REPO" "$TOOL_PATH" 2>&1 | sed 's/^/  /'
+  fi
+
+  # Set up dependencies
+  echo "Setting up..."
+  (cd "$TOOL_PATH" && mise trust -q 2>/dev/null; mise install -q 2>/dev/null) || true
+fi
 
 if [ ! -f "$TOOL_PATH/mise.toml" ]; then
   echo "Warning: no mise.toml found at $TOOL_PATH"
-  echo "Are you sure this is a mise-based project?"
-  read -r -p "Continue? [y/N] " confirm
-  [ "$confirm" = "y" ] || exit 1
 fi
 
 shiv_create_shim "$NAME" "$TOOL_PATH"
 shiv_register "$NAME" "$TOOL_PATH"
 
-echo "Installed: $NAME → $TOOL_PATH"
-echo "Shim: $SHIV_BIN_DIR/$NAME"
 echo ""
-echo "If you haven't already, add to your shell config:"
+echo "✓ Installed: $NAME → $TOOL_PATH"
+echo "  Shim: $SHIV_BIN_DIR/$NAME"
+echo ""
+echo "Reload your shell or run:"
 echo "  eval \"\$(mise -C $REPO_DIR run -q shell)\""

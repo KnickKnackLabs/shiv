@@ -5,7 +5,10 @@
 # It's sourced by shiv's own tasks and can be used standalone.
 
 SHIV_BIN_DIR="$HOME/.local/bin"
+SHIV_DATA_DIR="$HOME/.local/share/shiv"
+SHIV_PACKAGES_DIR="$SHIV_DATA_DIR/packages"
 SHIV_REGISTRY="$HOME/.config/shiv/registry.json"
+SHIV_SOURCES="$HOME/.config/shiv/sources.json"
 
 # Ensure registry exists
 shiv_init_registry() {
