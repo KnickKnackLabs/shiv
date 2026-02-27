@@ -31,7 +31,14 @@ if [ ! -d "\$REPO" ]; then
   echo "$name: run 'shiv doctor' to diagnose" >&2
   exit 1
 fi
-exec mise -C "\$REPO" run "\$@"
+case "\${1:-}" in
+  --help|-h|help)
+    exec mise -C "\$REPO" tasks
+    ;;
+  *)
+    exec mise -C "\$REPO" run "\$@"
+    ;;
+esac
 SCRIPT
   chmod +x "$SHIV_BIN_DIR/$name"
 }
@@ -52,10 +59,4 @@ shiv_unregister() {
   local tmp
   tmp=$(jq --arg n "$name" 'del(.[$n])' "$SHIV_REGISTRY")
   echo "$tmp" > "$SHIV_REGISTRY"
-}
-
-# Output shell config (PATH + alias) for a tool
-shiv_shell_config() {
-  local name="$1" repo_dir="$2"
-  echo "alias $name='mise -C \"$repo_dir\" run'"
 }
