@@ -31,6 +31,7 @@ if [ ! -d "\$REPO" ]; then
   echo "$name: run 'shiv doctor' to diagnose" >&2
   exit 1
 fi
+export CALLER_PWD="\$PWD"
 case "\${1:-}" in
   --help|-h|help)
     exec mise -C "\$REPO" tasks
