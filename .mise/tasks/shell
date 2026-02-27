@@ -15,6 +15,11 @@ case ":$PATH:" in
   *) echo "export PATH=\"$SHIV_BIN_DIR:\$PATH\"" ;;
 esac
 
+# Export SHIV_SOURCES if sources directory has files
+if [ -n "$SHIV_SOURCES" ]; then
+  echo "export SHIV_SOURCES=\"$SHIV_SOURCES\""
+fi
+
 # Output aliases for all registered tools
 shiv_init_registry
 jq -r 'to_entries[] | "\(.key) \(.value)"' "$SHIV_REGISTRY" | while read -r name repo; do
