@@ -1,0 +1,103 @@
+name: Test Install
+
+on:
+  pull_request:
+    paths:
+      - docs/install.sh
+      - docs/install.ps1
+  push:
+    branches: [main]
+    paths:
+      - docs/install.sh
+      - docs/install.ps1
+  workflow_dispatch:
+
+jobs:
+  test-bash:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Clean install
+        env:
+          SHIV_NONINTERACTIVE: "1"
+          SHIV_REGISTRIES: knacklabs
+        run: bash docs/install.sh
+
+      - name: Verify shiv is available
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          shiv list
+
+      - name: Verify registry
+        run: |
+          test -f "$HOME/.config/shiv/registry.json"
+          jq -e '.shiv' "$HOME/.config/shiv/registry.json"
+
+      - name: Verify sources
+        run: |
+          test -f "$HOME/.config/shiv/sources/knacklabs.json"
+          jq -e '.shimmer' "$HOME/.config/shiv/sources/knacklabs.json"
+
+      - name: Idempotent re-install
+        env:
+          SHIV_NONINTERACTIVE: "1"
+          SHIV_REGISTRIES: knacklabs
+        run: bash docs/install.sh
+
+      - name: Verify shiv still works
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          shiv list
+
+  test-powershell:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Clean install
+        shell: pwsh
+        env:
+          SHIV_NONINTERACTIVE: "1"
+          SHIV_REGISTRIES: knacklabs
+        run: |
+          & ./docs/install.ps1
+
+      - name: Verify shiv is available
+        shell: pwsh
+        run: |
+          $env:PATH = "$env:LOCALAPPDATA\shiv\bin;$env:PATH"
+          & "$env:LOCALAPPDATA\shiv\bin\shiv.ps1" list
+
+      - name: Verify registry
+        shell: pwsh
+        run: |
+          $registryFile = Join-Path $env:APPDATA 'shiv\registry.json'
+          if (-not (Test-Path $registryFile)) { throw 'registry.json not found' }
+          $registry = Get-Content $registryFile | ConvertFrom-Json
+          if (-not $registry.shiv) { throw 'shiv not in registry' }
+
+      - name: Verify sources
+        shell: pwsh
+        run: |
+          $sourcesFile = Join-Path $env:APPDATA 'shiv\sources\knacklabs.json'
+          if (-not (Test-Path $sourcesFile)) { throw 'knacklabs.json not found' }
+          $sources = Get-Content $sourcesFile | ConvertFrom-Json
+          if (-not $sources.shimmer) { throw 'shimmer not in sources' }
+
+      - name: Idempotent re-install
+        shell: pwsh
+        env:
+          SHIV_NONINTERACTIVE: "1"
+          SHIV_REGISTRIES: knacklabs
+        run: |
+          & ./docs/install.ps1
+
+      - name: Verify shiv still works
+        shell: pwsh
+        run: |
+          $env:PATH = "$env:LOCALAPPDATA\shiv\bin;$env:PATH"
+          & "$env:LOCALAPPDATA\shiv\bin\shiv.ps1" list

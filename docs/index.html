@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>shiv</title>
+  <style>
+    body {
+      font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+      background: #0d1117;
+      color: #c9d1d9;
+      max-width: 640px;
+      margin: 4rem auto;
+      padding: 0 2rem;
+      line-height: 1.6;
+    }
+    h1 { color: #f0f6fc; font-size: 2rem; margin-bottom: 0.25rem; }
+    h2 { color: #f0f6fc; font-size: 1.2rem; margin-top: 2rem; }
+    .tagline { color: #8b949e; margin-top: 0; }
+    code {
+      background: #161b22;
+      padding: 0.8rem 1.2rem;
+      display: block;
+      border-radius: 6px;
+      border: 1px solid #30363d;
+      margin: 0.5rem 0 1rem;
+      white-space: nowrap;
+      overflow-x: auto;
+    }
+    .dim { color: #8b949e; margin-bottom: 0.25rem; }
+    a { color: #58a6ff; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .links { margin-top: 2rem; }
+  </style>
+</head>
+<body>
+  <h1>shiv</h1>
+  <p class="tagline">A self-hosting CLI shim manager.</p>
+
+  <h2>Install</h2>
+  <p class="dim">Linux &amp; macOS:</p>
+  <code>curl -fsSL shiv.knacklabs.co/install.sh | bash</code>
+
+  <p class="dim">Windows (PowerShell 7+):</p>
+  <code>irm shiv.knacklabs.co/install.ps1 | iex</code>
+
+  <div class="links">
+    <a href="https://github.com/KnickKnackLabs/shiv">GitHub</a> &middot;
+    <a href="https://github.com/KnickKnackLabs/shiv/issues">Issues</a>
+  </div>
+</body>
+</html>
