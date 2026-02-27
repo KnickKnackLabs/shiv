@@ -1,6 +1,29 @@
 #!/usr/bin/env bash
 # shiv quick-install — https://shiv.knacklabs.co
 # Usage: curl -fsSL shiv.knacklabs.co/install.sh | bash
+
+# --- Handle piped execution (curl | bash) ---
+# When piped, bash reads the script from stdin, which conflicts with
+# interactive prompts. Save to a temp file and re-exec with stdin from /dev/tty.
+if [ ! -t 0 ]; then
+  if grep -q "shiv quick-install" "$0" 2>/dev/null; then
+    # Running from a file (bash install.sh) without a tty — non-interactive
+    SHIV_NONINTERACTIVE=1
+  else
+    # Piped (curl ... | bash) — save script and re-exec to free stdin
+    _shiv_script=$(mktemp)
+    cat > "$_shiv_script"
+    if [ "${SHIV_NONINTERACTIVE:-0}" != "1" ] && (: < /dev/tty) 2>/dev/null; then
+      bash "$_shiv_script" "$@" < /dev/tty
+    else
+      SHIV_NONINTERACTIVE=1 bash "$_shiv_script" "$@"
+    fi
+    _rc=$?
+    rm -f "$_shiv_script"
+    exit $_rc
+  fi
+fi
+
 set -eo pipefail
 
 # Configuration via environment variables
@@ -12,16 +35,6 @@ SHIV_REGISTRIES="${SHIV_REGISTRIES:-}"
 
 CHICLE_URL="https://github.com/KnickKnackLabs/chicle/releases/latest/download/chicle.sh"
 TOTAL_STEPS=6
-
-# --- stdin redirect for curl | bash ---
-# When piped, stdin is the pipe. Redirect from /dev/tty for interactive prompts.
-if [ ! -t 0 ]; then
-  if [ "$SHIV_NONINTERACTIVE" != "1" ] && (: < /dev/tty) 2>/dev/null; then
-    exec < /dev/tty
-  else
-    SHIV_NONINTERACTIVE=1
-  fi
-fi
 
 # --- Load chicle with graceful fallback ---
 eval "$(curl -fsSL "$CHICLE_URL" 2>/dev/null)" 2>/dev/null || true
