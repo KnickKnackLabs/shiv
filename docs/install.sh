@@ -36,8 +36,20 @@ SHIV_REGISTRIES="${SHIV_REGISTRIES:-}"
 CHICLE_URL="https://github.com/KnickKnackLabs/chicle/releases/latest/download/chicle.sh"
 TOTAL_STEPS=6
 
+# Ensure TERM is set (tput needs it; containers often have TERM=dumb or unset)
+if [ -z "$TERM" ] || [ "$TERM" = "dumb" ]; then
+  export TERM=xterm
+fi
+
 # --- Load chicle with graceful fallback ---
 eval "$(curl -fsSL "$CHICLE_URL" 2>/dev/null)" 2>/dev/null || true
+
+# If chicle loaded but tput isn't available (e.g. Alpine), override tput-dependent
+# functions and force non-interactive (chicle_choose needs cursor control)
+if type chicle_log >/dev/null 2>&1 && ! command -v tput >/dev/null 2>&1; then
+  chicle_rule() { printf '%s\n' "────────────────────────────────────────"; }
+  SHIV_NONINTERACTIVE=1
+fi
 
 if ! type chicle_log >/dev/null 2>&1; then
   chicle_style() {
@@ -115,9 +127,17 @@ is_interactive() {
 }
 
 # --- Step 1: Detect environment ---
+if is_interactive; then
+  MODE="interactive"
+else
+  MODE="non-interactive"
+fi
+
 echo ""
 chicle_rule
 chicle_style --bold "shiv installer"
+printf " "
+chicle_style --dim "($MODE)"
 echo ""
 chicle_rule
 echo ""
