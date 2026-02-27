@@ -14,9 +14,3 @@ case ":$PATH:" in
   *":$SHIV_BIN_DIR:"*) ;;
   *) echo "export PATH=\"$SHIV_BIN_DIR:\$PATH\"" ;;
 esac
-
-# Output aliases for all registered tools
-shiv_init_registry
-jq -r 'to_entries[] | "\(.key) \(.value)"' "$SHIV_REGISTRY" | while read -r name repo; do
-  shiv_shell_config "$name" "$repo"
-done

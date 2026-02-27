@@ -60,8 +60,3 @@ shiv_unregister() {
   tmp=$(jq --arg n "$name" 'del(.[$n])' "$SHIV_REGISTRY")
   echo "$tmp" > "$SHIV_REGISTRY"
 }
-
-# Output shell config for a tool (no-op: shims in ~/.local/bin handle everything)
-shiv_shell_config() {
-  :
-}
