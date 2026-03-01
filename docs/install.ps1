@@ -11,7 +11,7 @@ $ShivConfigDir = if ($env:SHIV_CONFIG_DIR) { $env:SHIV_CONFIG_DIR } else { Join-
 $ShivRegistries = $env:SHIV_REGISTRIES
 $TotalSteps = 6
 
-$ChicleUrl = 'https://github.com/KnickKnackLabs/chicle/releases/latest/download/chicle.psm1'
+$ChicleUrl = 'https://raw.githubusercontent.com/KnickKnackLabs/chicle/74cb095/chicle.psm1'
 
 # Detect non-interactive environment
 if (-not [Environment]::UserInteractive) {
@@ -127,8 +127,10 @@ if (Get-Command mise -ErrorAction SilentlyContinue) {
         }
     }
 
-    # Refresh PATH
-    $env:PATH = "$env:LOCALAPPDATA\mise;$env:PATH"
+    # Refresh PATH from registry (picks up whatever winget/installer wrote)
+    $machinePath = [Environment]::GetEnvironmentVariable('PATH', 'Machine')
+    $userPath = [Environment]::GetEnvironmentVariable('PATH', 'User')
+    $env:PATH = "$userPath;$machinePath"
 
     if (Get-Command mise -ErrorAction SilentlyContinue) {
         Chicle-Log --success 'mise installed successfully'
