@@ -211,6 +211,13 @@ Write-Host ''
 # --- Step 5: Shell integration ---
 Chicle-Steps -Current 5 -Total $TotalSteps -Title 'Setting up shell integration' -Style dots
 
+# Resolve full mise path for embedding in shim and profile
+$MiseBin = (Get-Command mise -ErrorAction SilentlyContinue).Source
+if (-not $MiseBin) {
+    Chicle-Log --error 'mise not found — cannot create shim'
+    exit 1
+}
+
 # Create shiv's own shim (PowerShell + cmd wrapper)
 if (-not (Test-Path $ShivBinDir)) { New-Item -ItemType Directory -Path $ShivBinDir -Force | Out-Null }
 
@@ -222,7 +229,7 @@ if (-not (Test-Path `$Repo)) {
     Write-Error 'shiv: repo not found at `$Repo'
     exit 1
 }
-mise -C `$Repo run @args
+& '$MiseBin' -C `$Repo run @args
 "@ | Set-Content $shimPs1 -Encoding UTF8
 
 $shimCmd = Join-Path $ShivBinDir 'shiv.cmd'
@@ -256,7 +263,7 @@ if ($userPath -notlike "*$ShivBinDir*") {
 }
 
 # Configure PowerShell profile
-$evalLine = "Invoke-Expression (mise -C '$ShivInstallPath' run -q shell 2>`$null)"
+$evalLine = "Invoke-Expression (& '$MiseBin' -C '$ShivInstallPath' run -q shell 2>`$null)"
 $profilePath = $PROFILE.CurrentUserCurrentHost
 $alreadyConfigured = $false
 

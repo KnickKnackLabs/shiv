@@ -218,8 +218,11 @@ else
 fi
 
 MISE_BIN="$(command -v mise)"
-(cd "$SHIV_INSTALL_PATH" && "$MISE_BIN" trust -q 2>/dev/null && "$MISE_BIN" install -q 2>/dev/null)
-chicle_log --success "shiv dependencies ready"
+if (cd "$SHIV_INSTALL_PATH" && "$MISE_BIN" trust -q 2>/dev/null && "$MISE_BIN" install -q 2>/dev/null); then
+  chicle_log --success "shiv dependencies ready"
+else
+  chicle_log --warn "mise install skipped (jq may already be available)"
+fi
 echo ""
 
 # --- Step 4: Configure registries ---
