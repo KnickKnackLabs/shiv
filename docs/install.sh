@@ -101,9 +101,9 @@ if ! type chicle_log >/dev/null 2>&1; then
     fi
   }
   chicle_choose() {
-    local header="" options=()
+    local header="" var_name="" options=()
     while [ $# -gt 0 ]; do
-      case $1 in --header) header="$2"; shift 2 ;; --multi) shift ;; *) options+=("$1"); shift ;; esac
+      case $1 in --header) header="$2"; shift 2 ;; --multi) shift ;; --var) var_name="$2"; shift 2 ;; *) options+=("$1"); shift ;; esac
     done
     [ -n "$header" ] && echo "$header"
     local i=1
@@ -114,11 +114,18 @@ if ! type chicle_log >/dev/null 2>&1; then
     printf "> "
     read -r choice
     # Support comma-separated for multi-select fallback
+    local result=""
     local IFS=','
     for c in $choice; do
       c=$(echo "$c" | tr -d ' ')
-      [ -n "$c" ] && echo "${options[$((c - 1))]}"
+      [ -n "$c" ] && result="${result:+$result
+}${options[$((c - 1))]}"
     done
+    if [ -n "$var_name" ]; then
+      printf -v "$var_name" '%s' "$result"
+    else
+      printf '%s\n' "$result"
+    fi
   }
 fi
 
