@@ -161,8 +161,8 @@ if (Test-Path (Join-Path $ShivInstallPath '.git')) {
 
 Chicle-Spin -Title 'Installing shiv dependencies' -ScriptBlock {
     Set-Location $using:ShivInstallPath
-    mise trust -q 2>$null
-    mise install -q 2>$null
+    mise trust -q
+    mise install -q
 }
 Chicle-Log --success 'shiv dependencies ready'
 Write-Host ''
