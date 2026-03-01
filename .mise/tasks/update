@@ -14,12 +14,17 @@ if [ "$COUNT" -eq 0 ]; then
   exit 0
 fi
 
-echo "Refreshing $COUNT shim(s)..."
+echo "Updating $COUNT tool(s)..."
 
 jq -r 'to_entries[] | "\(.key) \(.value)"' "$SHIV_REGISTRY" | while read -r name repo; do
   if [ -d "$repo" ]; then
-    shiv_create_shim "$name" "$repo"
-    echo "  ✓ $name → $repo"
+    if git -C "$repo" pull --ff-only >/dev/null 2>&1; then
+      shiv_create_shim "$name" "$repo"
+      echo "  ✓ $name → $repo"
+    else
+      shiv_create_shim "$name" "$repo"
+      echo "  ⚠ $name → $repo (pull failed, shim refreshed)"
+    fi
   else
     echo "  ✗ $name — repo not found at $repo (skipped)"
   fi
