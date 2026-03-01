@@ -67,10 +67,10 @@ jobs:
           docker run --rm -v "$PWD/docs/install.sh:/install.sh:ro" ${{ matrix.image }} sh -c '
             if command -v apk >/dev/null 2>&1; then
               apk update --quiet >/dev/null 2>&1
-              apk add --quiet bash curl git >/dev/null 2>&1
+              apk add --quiet bash curl git jq >/dev/null 2>&1
             else
               apt-get update -qq >/dev/null 2>&1
-              apt-get install -y -qq curl git >/dev/null 2>&1
+              apt-get install -y -qq curl git jq >/dev/null 2>&1
             fi
             SHIV_NONINTERACTIVE=1 SHIV_REGISTRIES=knacklabs bash /install.sh
             export PATH="$HOME/.local/bin:$PATH"
