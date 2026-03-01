@@ -218,7 +218,7 @@ else
 fi
 
 chicle_spin --title "Installing shiv dependencies" -- \
-  bash -c "cd '$SHIV_INSTALL_PATH' && mise trust -q && mise install -q"
+  bash -c "cd '$SHIV_INSTALL_PATH' && mise trust -q 2>/dev/null && mise install -q 2>/dev/null"
 
 chicle_log --success "shiv dependencies ready"
 echo ""
