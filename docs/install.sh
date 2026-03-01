@@ -33,7 +33,7 @@ SHIV_BIN_DIR="${SHIV_BIN_DIR:-$HOME/.local/bin}"
 SHIV_CONFIG_DIR="${SHIV_CONFIG_DIR:-$HOME/.config/shiv}"
 SHIV_REGISTRIES="${SHIV_REGISTRIES:-}"
 
-CHICLE_URL="https://github.com/KnickKnackLabs/chicle/releases/latest/download/chicle.sh"
+CHICLE_URL="https://raw.githubusercontent.com/KnickKnackLabs/chicle/74cb095/chicle.sh"
 TOTAL_STEPS=6
 
 # Ensure TERM is set (tput needs it; containers often have TERM=dumb or unset)
@@ -245,8 +245,8 @@ if [ -n "$SHIV_REGISTRIES" ]; then
   fi
 elif is_interactive; then
   echo ""
-  SELECTED=$(chicle_choose --header "Additional package registries" --multi \
-    "ricon-family (fold, food)")
+  chicle_choose --var SELECTED --header "Additional package registries" --multi \
+    "ricon-family (fold, food)"
 
   if echo "$SELECTED" | grep -q "ricon-family"; then
     add_ricon_registry
