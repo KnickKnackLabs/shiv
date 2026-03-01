@@ -282,7 +282,7 @@ if [ ! -d "\$REPO" ]; then
   echo "shiv: reinstall with: curl -fsSL shiv.knacklabs.co/install.sh | bash" >&2
   exit 1
 fi
-exec mise -C "\$REPO" run "\$@"
+exec "$MISE_BIN" -C "\$REPO" run "\$@"
 SHIM
 chmod +x "$SHIV_BIN_DIR/shiv"
 
@@ -310,7 +310,7 @@ case "$USER_SHELL" in
   fish) SHELL_CONFIG="$HOME/.config/fish/config.fish" ;;
 esac
 
-EVAL_LINE="eval \"\$(mise -C '$SHIV_INSTALL_PATH' run -q shell)\""
+EVAL_LINE="eval \"\$('$MISE_BIN' -C '$SHIV_INSTALL_PATH' run -q shell)\""
 
 ALREADY_CONFIGURED=0
 if [ -n "$SHELL_CONFIG" ] && grep -qF "shiv" "$SHELL_CONFIG" 2>/dev/null; then
