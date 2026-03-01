@@ -146,23 +146,25 @@ Chicle-Steps -Current 3 -Total $TotalSteps -Title 'Installing shiv' -Style dots
 
 if (Test-Path (Join-Path $ShivInstallPath '.git')) {
     Chicle-Log --info 'shiv already installed - updating...'
-    Chicle-Spin -Title 'Pulling latest' -ScriptBlock {
-        git -C $using:ShivInstallPath pull --ff-only --quiet
-    }
+    git -C $ShivInstallPath pull --ff-only --quiet
     Chicle-Log --success 'shiv updated'
 } else {
     $parentDir = Split-Path $ShivInstallPath -Parent
     if (-not (Test-Path $parentDir)) { New-Item -ItemType Directory -Path $parentDir -Force | Out-Null }
-    Chicle-Spin -Title 'Cloning shiv' -ScriptBlock {
-        git clone --quiet https://github.com/KnickKnackLabs/shiv.git $using:ShivInstallPath
+    git clone --quiet https://github.com/KnickKnackLabs/shiv.git $ShivInstallPath
+    if (-not (Test-Path (Join-Path $ShivInstallPath 'sources.json'))) {
+        Chicle-Log --error "shiv clone failed — sources.json not found at $ShivInstallPath"
+        exit 1
     }
     Chicle-Log --success "shiv cloned to $ShivInstallPath"
 }
 
-Chicle-Spin -Title 'Installing shiv dependencies' -ScriptBlock {
-    Set-Location $using:ShivInstallPath
+Push-Location $ShivInstallPath
+try {
     mise trust -q 2>$null
     mise install -q 2>$null
+} finally {
+    Pop-Location
 }
 Chicle-Log --success 'shiv dependencies ready'
 Write-Host ''
