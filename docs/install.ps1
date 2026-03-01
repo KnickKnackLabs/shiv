@@ -118,13 +118,11 @@ if (Get-Command mise -ErrorAction SilentlyContinue) {
 
     # Try winget first, then fall back to PowerShell installer
     if (Get-Command winget -ErrorAction SilentlyContinue) {
-        Chicle-Spin -Title 'Installing mise via winget' -ScriptBlock {
-            winget install jdx.mise --accept-source-agreements --accept-package-agreements 2>$null
-        }
+        Chicle-Log --info 'Installing mise via winget...'
+        winget install jdx.mise --accept-source-agreements --accept-package-agreements 2>$null | Out-Null
     } else {
-        Chicle-Spin -Title 'Installing mise' -ScriptBlock {
-            & ([scriptblock]::Create((Invoke-WebRequest -Uri 'https://mise.jdx.dev/install.ps1').Content))
-        }
+        Chicle-Log --info 'Installing mise...'
+        & ([scriptblock]::Create((Invoke-WebRequest -Uri 'https://mise.jdx.dev/install.ps1').Content))
     }
 
     # Refresh PATH from registry (picks up whatever winget/installer wrote)
@@ -163,6 +161,8 @@ Push-Location $ShivInstallPath
 try {
     mise trust -q 2>$null
     mise install -q 2>$null
+} catch {
+    # Non-fatal: tools may fail to install (e.g. rate limits)
 } finally {
     Pop-Location
 }
@@ -321,3 +321,4 @@ Write-Host "  1. Restart your shell (or run: . `$PROFILE)"
 Write-Host '  2. Try: shiv list'
 Write-Host '  3. Install a tool: shiv install shimmer'
 Write-Host ''
+exit 0
