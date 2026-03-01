@@ -15,18 +15,14 @@ if [ -n "$LOCAL_PATH" ]; then
   TOOL_PATH="$(cd "$LOCAL_PATH" && pwd)"
 else
   # Package install — look up in sources and clone
-  SOURCES="$REPO_DIR/sources.json"
-  if [ ! -f "$SOURCES" ]; then
-    echo "Error: no sources.json found" >&2
-    exit 1
-  fi
-
-  GH_REPO=$(jq -r --arg n "$NAME" '.[$n] // empty' "$SOURCES")
+  GH_REPO=$(shiv_lookup "$NAME")
   if [ -z "$GH_REPO" ]; then
     echo "Error: '$NAME' not found in package index" >&2
     echo ""
     echo "Available packages:"
-    jq -r 'to_entries[] | "  \(.key) → \(.value)"' "$SOURCES"
+    shiv_list_sources | while read -r pkg repo; do
+      echo "  $pkg → $repo"
+    done
     exit 1
   fi
 
