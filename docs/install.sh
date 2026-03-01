@@ -169,7 +169,7 @@ USER_SHELL="$(basename "${SHELL:-/bin/bash}")"
 
 chicle_log --success "Detected $OS_NAME ($ARCH_NAME), shell: $USER_SHELL"
 
-for cmd in curl git; do
+for cmd in curl git jq; do
   if ! command -v "$cmd" >/dev/null 2>&1; then
     chicle_log --error "Required tool not found: $cmd"
     chicle_log --info "Install $cmd and re-run the installer."
@@ -177,7 +177,7 @@ for cmd in curl git; do
   fi
 done
 
-chicle_log --success "Prerequisites satisfied (curl, git)"
+chicle_log --success "Prerequisites satisfied (curl, git, jq)"
 echo ""
 
 # --- Step 2: Set up mise ---
@@ -217,10 +217,8 @@ else
   chicle_log --success "shiv cloned to $SHIV_INSTALL_PATH"
 fi
 
-chicle_spin --title "Installing shiv dependencies" -- \
-  bash -c "cd '$SHIV_INSTALL_PATH' && mise trust -q 2>/dev/null && mise install -q 2>/dev/null"
-
-chicle_log --success "shiv dependencies ready"
+MISE_BIN="$(command -v mise)"
+(cd "$SHIV_INSTALL_PATH" && "$MISE_BIN" trust -q 2>/dev/null) || true
 echo ""
 
 # --- Step 4: Configure registries ---
@@ -264,7 +262,7 @@ fi
 PACKAGE_COUNT=0
 for sf in "$SOURCES_DIR"/*.json; do
   [ -f "$sf" ] || continue
-  n=$(mise -C "$SHIV_INSTALL_PATH" exec -- jq 'length' "$sf")
+  n=$(jq 'length' "$sf")
   PACKAGE_COUNT=$((PACKAGE_COUNT + n))
 done
 chicle_log --success "$PACKAGE_COUNT packages available"
@@ -284,7 +282,7 @@ if [ ! -d "\$REPO" ]; then
   echo "shiv: reinstall with: curl -fsSL shiv.knacklabs.co/install.sh | bash" >&2
   exit 1
 fi
-exec mise -C "\$REPO" run "\$@"
+exec "$MISE_BIN" -C "\$REPO" run "\$@"
 SHIM
 chmod +x "$SHIV_BIN_DIR/shiv"
 
@@ -295,7 +293,7 @@ if [ ! -f "$SHIV_CONFIG_DIR/registry.json" ]; then
 fi
 
 # Register shiv in its own registry
-TMP=$(mise -C "$SHIV_INSTALL_PATH" exec -- jq --arg p "$SHIV_INSTALL_PATH" '. + {"shiv": $p}' "$SHIV_CONFIG_DIR/registry.json")
+TMP=$(jq --arg p "$SHIV_INSTALL_PATH" '. + {"shiv": $p}' "$SHIV_CONFIG_DIR/registry.json")
 echo "$TMP" > "$SHIV_CONFIG_DIR/registry.json"
 
 chicle_log --success "shiv shim created at $SHIV_BIN_DIR/shiv"
@@ -312,7 +310,7 @@ case "$USER_SHELL" in
   fish) SHELL_CONFIG="$HOME/.config/fish/config.fish" ;;
 esac
 
-EVAL_LINE="eval \"\$(mise -C '$SHIV_INSTALL_PATH' run -q shell)\""
+EVAL_LINE="eval \"\$('$MISE_BIN' -C '$SHIV_INSTALL_PATH' run -q shell)\""
 
 ALREADY_CONFIGURED=0
 if [ -n "$SHELL_CONFIG" ] && grep -qF "shiv" "$SHELL_CONFIG" 2>/dev/null; then

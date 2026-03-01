@@ -118,13 +118,11 @@ if (Get-Command mise -ErrorAction SilentlyContinue) {
 
     # Try winget first, then fall back to PowerShell installer
     if (Get-Command winget -ErrorAction SilentlyContinue) {
-        Chicle-Spin -Title 'Installing mise via winget' -ScriptBlock {
-            winget install jdx.mise --accept-source-agreements --accept-package-agreements 2>$null
-        }
+        Chicle-Log --info 'Installing mise via winget...'
+        winget install jdx.mise --accept-source-agreements --accept-package-agreements 2>$null | Out-Null
     } else {
-        Chicle-Spin -Title 'Installing mise' -ScriptBlock {
-            & ([scriptblock]::Create((Invoke-WebRequest -Uri 'https://mise.jdx.dev/install.ps1').Content))
-        }
+        Chicle-Log --info 'Installing mise...'
+        & ([scriptblock]::Create((Invoke-WebRequest -Uri 'https://mise.jdx.dev/install.ps1').Content))
     }
 
     # Refresh PATH from registry (picks up whatever winget/installer wrote)
@@ -146,23 +144,27 @@ Chicle-Steps -Current 3 -Total $TotalSteps -Title 'Installing shiv' -Style dots
 
 if (Test-Path (Join-Path $ShivInstallPath '.git')) {
     Chicle-Log --info 'shiv already installed - updating...'
-    Chicle-Spin -Title 'Pulling latest' -ScriptBlock {
-        git -C $using:ShivInstallPath pull --ff-only --quiet
-    }
+    git -C $ShivInstallPath pull --ff-only --quiet
     Chicle-Log --success 'shiv updated'
 } else {
     $parentDir = Split-Path $ShivInstallPath -Parent
     if (-not (Test-Path $parentDir)) { New-Item -ItemType Directory -Path $parentDir -Force | Out-Null }
-    Chicle-Spin -Title 'Cloning shiv' -ScriptBlock {
-        git clone --quiet https://github.com/KnickKnackLabs/shiv.git $using:ShivInstallPath
+    git clone --quiet https://github.com/KnickKnackLabs/shiv.git $ShivInstallPath
+    if (-not (Test-Path (Join-Path $ShivInstallPath 'sources.json'))) {
+        Chicle-Log --error "shiv clone failed — sources.json not found at $ShivInstallPath"
+        exit 1
     }
     Chicle-Log --success "shiv cloned to $ShivInstallPath"
 }
 
-Chicle-Spin -Title 'Installing shiv dependencies' -ScriptBlock {
-    Set-Location $using:ShivInstallPath
+Push-Location $ShivInstallPath
+try {
     mise trust -q 2>$null
     mise install -q 2>$null
+} catch {
+    # Non-fatal: tools may fail to install (e.g. rate limits)
+} finally {
+    Pop-Location
 }
 Chicle-Log --success 'shiv dependencies ready'
 Write-Host ''
@@ -209,6 +211,13 @@ Write-Host ''
 # --- Step 5: Shell integration ---
 Chicle-Steps -Current 5 -Total $TotalSteps -Title 'Setting up shell integration' -Style dots
 
+# Resolve full mise path for embedding in shim and profile
+$MiseBin = (Get-Command mise -ErrorAction SilentlyContinue).Source
+if (-not $MiseBin) {
+    Chicle-Log --error 'mise not found — cannot create shim'
+    exit 1
+}
+
 # Create shiv's own shim (PowerShell + cmd wrapper)
 if (-not (Test-Path $ShivBinDir)) { New-Item -ItemType Directory -Path $ShivBinDir -Force | Out-Null }
 
@@ -220,7 +229,7 @@ if (-not (Test-Path `$Repo)) {
     Write-Error 'shiv: repo not found at `$Repo'
     exit 1
 }
-mise -C `$Repo run @args
+& '$MiseBin' -C `$Repo run @args
 "@ | Set-Content $shimPs1 -Encoding UTF8
 
 $shimCmd = Join-Path $ShivBinDir 'shiv.cmd'
@@ -254,7 +263,7 @@ if ($userPath -notlike "*$ShivBinDir*") {
 }
 
 # Configure PowerShell profile
-$evalLine = "Invoke-Expression (mise -C '$ShivInstallPath' run -q shell 2>`$null)"
+$evalLine = "Invoke-Expression (& '$MiseBin' -C '$ShivInstallPath' run -q shell 2>`$null)"
 $profilePath = $PROFILE.CurrentUserCurrentHost
 $alreadyConfigured = $false
 
@@ -312,3 +321,4 @@ Write-Host "  1. Restart your shell (or run: . `$PROFILE)"
 Write-Host '  2. Try: shiv list'
 Write-Host '  3. Install a tool: shiv install shimmer'
 Write-Host ''
+exit 0
