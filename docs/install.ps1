@@ -5,7 +5,7 @@ $ErrorActionPreference = 'Stop'
 
 # Configuration via environment variables
 $ShivNonInteractive = $env:SHIV_NONINTERACTIVE -eq '1'
-$ShivInstallPath = if ($env:SHIV_INSTALL_PATH) { $env:SHIV_INSTALL_PATH } else { Join-Path $env:LOCALAPPDATA 'shiv\self' }
+$ShivInstallPath = if ($env:SHIV_INSTALL_PATH) { $env:SHIV_INSTALL_PATH } else { Join-Path $env:LOCALAPPDATA 'shiv\packages\shiv' }
 $ShivBinDir = if ($env:SHIV_BIN_DIR) { $env:SHIV_BIN_DIR } else { Join-Path $env:LOCALAPPDATA 'shiv\bin' }
 $ShivConfigDir = if ($env:SHIV_CONFIG_DIR) { $env:SHIV_CONFIG_DIR } else { Join-Path $env:APPDATA 'shiv' }
 $ShivRegistries = $env:SHIV_REGISTRIES

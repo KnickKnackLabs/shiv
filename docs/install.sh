@@ -28,7 +28,7 @@ set -eo pipefail
 
 # Configuration via environment variables
 SHIV_NONINTERACTIVE="${SHIV_NONINTERACTIVE:-0}"
-SHIV_INSTALL_PATH="${SHIV_INSTALL_PATH:-$HOME/.local/share/shiv/self}"
+SHIV_INSTALL_PATH="${SHIV_INSTALL_PATH:-$HOME/.local/share/shiv/packages/shiv}"
 SHIV_BIN_DIR="${SHIV_BIN_DIR:-$HOME/.local/bin}"
 SHIV_CONFIG_DIR="${SHIV_CONFIG_DIR:-$HOME/.config/shiv}"
 SHIV_REGISTRIES="${SHIV_REGISTRIES:-}"
