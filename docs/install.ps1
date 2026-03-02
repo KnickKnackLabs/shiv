@@ -195,8 +195,7 @@ if ($ShivRegistries) {
     }
 } elseif (Test-Interactive) {
     Write-Host ''
-    $selected = Chicle-Choose -Header 'Additional package registries' -Multi 'ricon-family (fold, food)'
-    if ($selected -match 'ricon-family') {
+    if (Chicle-Confirm 'Add ricon-family packages (fold, food)?' -Default 'no') {
         Add-RiconRegistry
     }
 }

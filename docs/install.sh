@@ -250,10 +250,7 @@ if [ -n "$SHIV_REGISTRIES" ]; then
   fi
 elif is_interactive; then
   echo ""
-  chicle_choose --var SELECTED --header "Additional package registries" --multi \
-    "ricon-family (fold, food)"
-
-  if echo "$SELECTED" | grep -q "ricon-family"; then
+  if chicle_confirm --default no "Add ricon-family packages (fold, food)?"; then
     add_ricon_registry
   fi
 fi
