@@ -73,12 +73,6 @@ shiv_unregister() {
   echo "$tmp" > "$SHIV_REGISTRY"
 }
 
-# Output shell config (PATH + alias) for a tool
-shiv_shell_config() {
-  local name="$1" repo_dir="$2"
-  echo "alias $name='mise -C \"$repo_dir\" run'"
-}
-
 # Look up a package name across all sources (SHIV_SOURCES, then repo fallback)
 # Prints the GitHub repo slug (e.g. "KnickKnackLabs/shimmer") or returns 1
 shiv_lookup() {

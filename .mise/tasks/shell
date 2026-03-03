@@ -33,8 +33,8 @@ if [ -n "$SHIV_SOURCES" ]; then
   echo "export SHIV_SOURCES=\"$SHIV_SOURCES\""
 fi
 
-# Output aliases for all registered tools
+# Ensure shims exist for all registered tools
 shiv_init_registry
 jq -r 'to_entries[] | "\(.key) \(.value)"' "$SHIV_REGISTRY" | while read -r name repo; do
-  shiv_shell_config "$name" "$repo"
+  shiv_create_shim "$name" "$repo"
 done
