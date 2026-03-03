@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#MISE description="Output shell configuration for all managed tools (use with eval)"
+#MISE description="Output shell configuration (PATH, env vars) for eval"
 set -eo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -33,8 +33,3 @@ if [ -n "$SHIV_SOURCES" ]; then
   echo "export SHIV_SOURCES=\"$SHIV_SOURCES\""
 fi
 
-# Ensure shims exist for all registered tools
-shiv_init_registry
-jq -r 'to_entries[] | "\(.key) \(.value)"' "$SHIV_REGISTRY" | while read -r name repo; do
-  shiv_create_shim "$name" "$repo"
-done
