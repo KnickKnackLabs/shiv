@@ -1,12 +1,13 @@
 {
+  "audit": "KnickKnackLabs/audit",
   "butthair": "KnickKnackLabs/butthair",
   "frames": "KnickKnackLabs/frames",
   "ghpm": "KnickKnackLabs/ghpm",
-  "shimmer": "KnickKnackLabs/shimmer",
-  "wallpapers": "KnickKnackLabs/wallpapers",
-  "websites": "KnickKnackLabs/websites",
   "monkeys": "KnickKnackLabs/monkeys",
   "recorder": "KnickKnackLabs/recorder",
   "sessions": "KnickKnackLabs/sessions",
+  "shimmer": "KnickKnackLabs/shimmer",
+  "wallpapers": "KnickKnackLabs/wallpapers",
+  "websites": "KnickKnackLabs/websites",
   "zettelkasten": "KnickKnackLabs/zettelkasten"
 }
