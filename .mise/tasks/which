@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+#MISE description="Print the install path of a managed tool"
+#USAGE arg "<name>" help="Command name to look up"
+set -eo pipefail
+
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$REPO_DIR/lib/shim.sh"
+
+NAME="${usage_name}"
+
+shiv_init_registry
+
+PATH_VAL=$(jq -r --arg n "$NAME" '.[$n] // empty' "$SHIV_REGISTRY")
+
+if [ -z "$PATH_VAL" ]; then
+  echo "shiv: '$NAME' is not a managed tool" >&2
+  echo "Run 'shiv list' to see managed tools." >&2
+  exit 1
+fi
+
+echo "$PATH_VAL"
