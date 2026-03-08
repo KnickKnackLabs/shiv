@@ -49,6 +49,7 @@ fi
 
 shiv_create_shim "$NAME" "$TOOL_PATH"
 shiv_register "$NAME" "$TOOL_PATH"
+shiv_cache_tasks "$NAME" "$TOOL_PATH"
 
 echo ""
 echo "✓ Installed: $NAME → $TOOL_PATH"

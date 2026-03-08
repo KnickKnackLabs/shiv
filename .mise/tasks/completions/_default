@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+#MISE description="Output shell completion script (auto-detects shell)"
+#USAGE arg "[shell]" help="Shell type: bash, zsh, or fish (auto-detected if omitted)"
+set -eo pipefail
+
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}"/)/../../.." && pwd)"
+
+SHELL_TYPE="${usage_shell:-}"
+
+if [ -z "$SHELL_TYPE" ]; then
+  SHELL_TYPE="$(basename "${SHELL:-bash}")"
+fi
+
+case "$SHELL_TYPE" in
+  bash|zsh|fish)
+    exec mise -C "$REPO_DIR" run -q "completions:$SHELL_TYPE"
+    ;;
+  *)
+    echo "Unsupported shell: $SHELL_TYPE" >&2
+    echo "Supported: bash, zsh, fish" >&2
+    exit 1
+    ;;
+esac

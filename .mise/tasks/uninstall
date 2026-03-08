@@ -23,4 +23,5 @@ fi
 
 # Deregister
 shiv_unregister "$NAME"
+shiv_cache_remove "$NAME"
 echo "Unregistered: $NAME"

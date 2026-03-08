@@ -20,9 +20,11 @@ jq -r 'to_entries[] | "\(.key) \(.value)"' "$SHIV_REGISTRY" | while read -r name
   if [ -d "$repo" ]; then
     if git -C "$repo" pull --ff-only >/dev/null 2>&1; then
       shiv_create_shim "$name" "$repo"
+      shiv_cache_tasks "$name" "$repo"
       echo "  ✓ $name → $repo"
     else
       shiv_create_shim "$name" "$repo"
+      shiv_cache_tasks "$name" "$repo"
       echo "  ⚠ $name → $repo (pull failed, shim refreshed)"
     fi
   else
