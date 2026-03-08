@@ -37,9 +37,7 @@ complete -c ${name} -f -a '(begin
     __shiv_rebuild_cache "$name" "$repo" "\$cache"
   end
   if test -f "\$cache"
-    cat "\$cache" | while read -l line
-      string split -m 1 "\\t" -- \$line | string join "\\t"
-    end
+    cat "\$cache"
   end
 end)'
 

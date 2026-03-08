@@ -22,6 +22,7 @@ if [ -z "$EXISTING_SHIV" ]; then
   fi
   shiv_create_shim "shiv" "$SHIV_CANONICAL"
   shiv_register "shiv" "$SHIV_CANONICAL"
+  shiv_cache_tasks "shiv" "$SHIV_CANONICAL"
 fi
 
 # Ensure ~/.local/bin is on PATH (skip if already there)
