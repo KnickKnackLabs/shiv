@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 #MISE description="Install a tool — from the package index or a local path"
-#USAGE arg "<name>" help="Command name (e.g., shimmer, frames) or name and path"
+#USAGE arg "<name>" help="Package name (e.g., shimmer, frames)"
 #USAGE arg "[path]" help="Local path to repo (optional — if omitted, clones from package index)"
+#USAGE flag "--as <command>" help="Custom command name (default: same as package name)"
 set -eo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "$REPO_DIR/lib/shim.sh"
 
-NAME="${usage_name}"
+PACKAGE="${usage_name}"
+COMMAND="${usage_as:-$PACKAGE}"
 LOCAL_PATH="${usage_path:-}"
 
 if [ -n "$LOCAL_PATH" ]; then
@@ -15,9 +17,9 @@ if [ -n "$LOCAL_PATH" ]; then
   TOOL_PATH="$(cd "$LOCAL_PATH" && pwd)"
 else
   # Package install — look up in sources and clone
-  GH_REPO=$(shiv_lookup "$NAME")
+  GH_REPO=$(shiv_lookup "$PACKAGE")
   if [ -z "$GH_REPO" ]; then
-    echo "Error: '$NAME' not found in package index" >&2
+    echo "Error: '$PACKAGE' not found in package index" >&2
     echo ""
     echo "Available packages:"
     shiv_list_sources | while read -r pkg repo; do
@@ -26,7 +28,7 @@ else
     exit 1
   fi
 
-  TOOL_PATH="$SHIV_PACKAGES_DIR/$NAME"
+  TOOL_PATH="$SHIV_PACKAGES_DIR/$PACKAGE"
 
   if [ -d "$TOOL_PATH" ]; then
     echo "Already cloned: $TOOL_PATH"
@@ -47,13 +49,16 @@ if [ ! -f "$TOOL_PATH/mise.toml" ]; then
   echo "Warning: no mise.toml found at $TOOL_PATH"
 fi
 
-shiv_create_shim "$NAME" "$TOOL_PATH"
-shiv_register "$NAME" "$TOOL_PATH"
-shiv_cache_tasks "$NAME" "$TOOL_PATH"
+shiv_create_shim "$COMMAND" "$TOOL_PATH"
+shiv_register "$COMMAND" "$TOOL_PATH"
+shiv_cache_tasks "$COMMAND" "$TOOL_PATH"
 
 echo ""
-echo "✓ Installed: $NAME → $TOOL_PATH"
-echo "  Shim: $SHIV_BIN_DIR/$NAME"
+echo "✓ Installed: $COMMAND → $TOOL_PATH"
+echo "  Shim: $SHIV_BIN_DIR/$COMMAND"
+if [ "$COMMAND" != "$PACKAGE" ]; then
+  echo "  Alias: $PACKAGE → $COMMAND"
+fi
 echo ""
 echo "Reload your shell or run:"
 echo "  eval \"\$(mise -C $REPO_DIR run -q shell)\""
