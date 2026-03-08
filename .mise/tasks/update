@@ -25,6 +25,7 @@ jq -r 'to_entries[] | "\(.key) \(.value)"' "$SHIV_REGISTRY" | while read -r name
       shiv_create_shim "$name" "$repo"
       echo "  ⚠ $name → $repo (pull failed, shim refreshed)"
     fi
+    shiv_cache_tasks "$name" "$repo"
   else
     echo "  ✗ $name — repo not found at $repo (skipped)"
   fi

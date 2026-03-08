@@ -5,11 +5,13 @@ set -eo pipefail
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "$REPO_DIR/lib/shim.sh"
 
-# Self-hosting: shiv lives in packages/shiv like every other package
-SHIV_CANONICAL="$SHIV_PACKAGES_DIR/shiv"
-if [ "$REPO_DIR" != "$SHIV_CANONICAL" ]; then
-  # Bootstrap: running from an external clone — install shiv into packages/
-  if [ ! -d "$SHIV_CANONICAL" ]; then
+# Self-hosting: bootstrap shiv into packages/ if not already registered
+shiv_init_registry
+EXISTING_SHIV=$(jq -r '.shiv // empty' "$SHIV_REGISTRY")
+if [ -z "$EXISTING_SHIV" ]; then
+  # First time: shiv isn't registered yet — bootstrap it
+  SHIV_CANONICAL="$SHIV_PACKAGES_DIR/shiv"
+  if [ "$REPO_DIR" != "$SHIV_CANONICAL" ] && [ ! -d "$SHIV_CANONICAL" ]; then
     mkdir -p "$SHIV_PACKAGES_DIR"
     REMOTE=$(git -C "$REPO_DIR" remote get-url origin 2>/dev/null || echo "")
     if [ -n "$REMOTE" ]; then
@@ -18,9 +20,10 @@ if [ "$REPO_DIR" != "$SHIV_CANONICAL" ]; then
       cp -R "$REPO_DIR" "$SHIV_CANONICAL"
     fi
   fi
+  shiv_create_shim "shiv" "$SHIV_CANONICAL"
+  shiv_register "shiv" "$SHIV_CANONICAL"
+  shiv_cache_tasks "shiv" "$SHIV_CANONICAL"
 fi
-shiv_create_shim "shiv" "$SHIV_CANONICAL"
-shiv_register "shiv" "$SHIV_CANONICAL"
 
 # Ensure ~/.local/bin is on PATH (skip if already there)
 case ":$PATH:" in
@@ -31,5 +34,16 @@ esac
 # Export SHIV_SOURCES if sources directory has files
 if [ -n "$SHIV_SOURCES" ]; then
   echo "export SHIV_SOURCES=\"$SHIV_SOURCES\""
+fi
+
+# Auto-include shell completions
+SHIV_PATH=$(jq -r '.shiv // empty' "$SHIV_REGISTRY")
+if [ -n "$SHIV_PATH" ]; then
+  DETECTED_SHELL="$(basename "${SHELL:-bash}")"
+  case "$DETECTED_SHELL" in
+    bash|zsh|fish)
+      echo "eval \"\$(mise -C '$SHIV_PATH' run -q completions:$DETECTED_SHELL)\""
+      ;;
+  esac
 fi
 

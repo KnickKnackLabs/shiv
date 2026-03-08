@@ -1,0 +1,43 @@
+name: Test Completions
+
+on:
+  pull_request:
+    paths:
+      - lib/shim.sh
+      - .mise/tasks/completions/**
+      - test/completions.bats
+  push:
+    branches: [main]
+    paths:
+      - lib/shim.sh
+      - .mise/tasks/completions/**
+      - test/completions.bats
+  workflow_dispatch:
+
+jobs:
+  test-completions:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install mise
+        run: |
+          curl -sSf https://mise.jdx.dev/install.sh | bash
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Install dependencies
+        run: |
+          mise trust -q
+          mise install -q
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            sudo apt-add-repository -y ppa:fish-shell/release-4
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq fish zsh
+          fi
+
+      - name: Run completion tests
+        run: mise run -q test:completions

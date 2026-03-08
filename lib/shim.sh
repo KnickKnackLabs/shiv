@@ -4,11 +4,13 @@
 # This file contains the functions that create and manage shims.
 # It's sourced by shiv's own tasks and can be used standalone.
 
-SHIV_BIN_DIR="$HOME/.local/bin"
-SHIV_DATA_DIR="$HOME/.local/share/shiv"
-SHIV_PACKAGES_DIR="$SHIV_DATA_DIR/packages"
-SHIV_REGISTRY="$HOME/.config/shiv/registry.json"
-SHIV_SOURCES_DIR="$HOME/.config/shiv/sources"
+SHIV_BIN_DIR="${SHIV_BIN_DIR:-$HOME/.local/bin}"
+SHIV_DATA_DIR="${SHIV_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/shiv}"
+SHIV_PACKAGES_DIR="${SHIV_PACKAGES_DIR:-$SHIV_DATA_DIR/packages}"
+SHIV_CONFIG_DIR="${SHIV_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/shiv}"
+SHIV_CACHE_DIR="${SHIV_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/shiv}"
+SHIV_REGISTRY="${SHIV_REGISTRY:-$SHIV_CONFIG_DIR/registry.json}"
+SHIV_SOURCES_DIR="${SHIV_SOURCES_DIR:-$SHIV_CONFIG_DIR/sources}"
 
 # SHIV_SOURCES: comma-delimited list of sources.json files to search.
 # If not set by the user, auto-discover from SHIV_SOURCES_DIR.
@@ -48,7 +50,7 @@ case "\${1:-}" in
     exec mise -C "\$REPO" tasks
     ;;
   *)
-    exec mise -C "\$REPO" run "\$@"
+    exec mise -C "\$REPO" run -q "\$@"
     ;;
 esac
 SCRIPT
@@ -117,4 +119,28 @@ shiv_list_sources() {
   if [ -f "$repo_sources" ]; then
     jq -r 'to_entries[] | "\(.key) \(.value)"' "$repo_sources"
   fi
+}
+
+# Cache task list for a tool (name<TAB>description per line)
+# Writes atomically — only replaces cache if new content is non-empty,
+# so a failed mise invocation doesn't leave an empty cache file.
+shiv_cache_tasks() {
+  local name="$1" repo_dir="$2"
+  local cache="$SHIV_CACHE_DIR/completions/$name.cache"
+  local tmp="$cache.tmp"
+  mkdir -p "$SHIV_CACHE_DIR/completions"
+  mise tasks --json -C "$repo_dir" 2>/dev/null \
+    | jq -r '.[] | select(.hide == false) | "\(.name)\t\(.description)"' \
+    > "$tmp"
+  if [ -s "$tmp" ]; then
+    mv "$tmp" "$cache"
+  else
+    rm -f "$tmp"
+  fi
+}
+
+# Remove cached tasks for a tool
+shiv_cache_remove() {
+  local name="$1"
+  rm -f "$SHIV_CACHE_DIR/completions/$name.cache"
 }
