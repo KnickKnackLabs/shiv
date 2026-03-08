@@ -27,7 +27,7 @@ HEADER
 jq -r 'to_entries[] | "\(.key) \(.value)"' "$SHIV_REGISTRY" | while read -r name repo; do
   cache_file="$CACHE_BASE/$name.cache"
 
-  func_name="${name//-/_}"
+  func_name="${name//[^a-zA-Z0-9_]/_}"
 
   cat <<EOF
 _shiv_complete_${func_name}() {
@@ -37,7 +37,7 @@ _shiv_complete_${func_name}() {
   fi
   if [[ -f "\$cache" ]]; then
     local cur="\${COMP_WORDS[COMP_CWORD]}"
-    COMPREPLY=( \$(cut -f1 "\$cache" | grep "^\$cur") )
+    COMPREPLY=( \$(compgen -W "\$(cut -f1 "\$cache")" -- "\$cur") )
   fi
 }
 complete -F _shiv_complete_${func_name} ${name}

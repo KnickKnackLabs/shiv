@@ -32,7 +32,7 @@ jq -r 'to_entries[] | "\(.key) \(.value)"' "$SHIV_REGISTRY" | while read -r name
   cache_file="$CACHE_BASE/$name.cache"
 
   # Sanitize name for use as a shell function identifier
-  func_name="${name//-/_}"
+  func_name="${name//[^a-zA-Z0-9_]/_}"
 
   cat <<EOF
 _shiv_complete_${func_name}() {
