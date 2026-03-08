@@ -106,9 +106,10 @@ teardown() {
 }
 
 @test "bash: lazy cache rebuild on missing cache" {
-  # Pre-populate then delete — so the generated script has the right path baked in
+  # Pre-populate then truncate — so the generated script has the right path baked in
+  # Use truncate (empty file) rather than delete, to test the -s (non-empty) check
   shiv_cache_tasks "shiv" "$REPO_DIR"
-  rm -f "$SHIV_CACHE_DIR/completions/shiv.cache"
+  : > "$SHIV_CACHE_DIR/completions/shiv.cache"
   eval "$(mise -C "$REPO_DIR" run -q completions:bash)"
   COMP_WORDS=(shiv "")
   COMP_CWORD=1

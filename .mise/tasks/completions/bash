@@ -32,7 +32,7 @@ jq -r 'to_entries[] | "\(.key) \(.value)"' "$SHIV_REGISTRY" | while read -r name
   cat <<EOF
 _shiv_complete_${func_name}() {
   local cache="${cache_file}"
-  if [[ ! -f "\$cache" ]]; then
+  if [[ ! -s "\$cache" ]]; then
     __shiv_rebuild_cache "$name" "$repo" "\$cache"
   fi
   if [[ -f "\$cache" ]]; then

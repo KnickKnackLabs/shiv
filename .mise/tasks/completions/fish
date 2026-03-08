@@ -33,7 +33,7 @@ jq -r 'to_entries[] | "\(.key) \(.value)"' "$SHIV_REGISTRY" | while read -r name
 # completions for: ${name}
 complete -c ${name} -f -a '(begin
   set -l cache "${cache_file}"
-  if not test -f "\$cache"
+  if not test -s "\$cache"
     __shiv_rebuild_cache "$name" "$repo" "\$cache"
   end
   if test -f "\$cache"
