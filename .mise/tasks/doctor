@@ -57,7 +57,7 @@ shiv_registry_entries | while IFS=$'\t' read -r name repo; do
   for alias in "${aliases[@]}"; do
     if [ ! -L "$SHIV_BIN_DIR/$alias" ]; then
       issues="${issues}  alias symlink missing: $SHIV_BIN_DIR/$alias\n"
-    elif [ "$(readlink "$SHIV_BIN_DIR/$alias")" != "$SHIV_BIN_DIR/$name" ]; then
+    elif [ "$(readlink "$SHIV_BIN_DIR/$alias")" != "$name" ]; then
       issues="${issues}  alias symlink $alias points to wrong target\n"
     fi
   done

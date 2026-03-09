@@ -40,13 +40,13 @@ SCRIPT
   chmod +x "$SHIV_BIN_DIR/$name"
 }
 
-# Create alias symlinks for a package
+# Create alias symlinks for a package (relative, same directory)
 shiv_create_alias_symlinks() {
   local name="$1"
   shift
   local aliases=("$@")
   for alias in "${aliases[@]}"; do
-    ln -sf "$SHIV_BIN_DIR/$name" "$SHIV_BIN_DIR/$alias"
+    ln -sf "$name" "$SHIV_BIN_DIR/$alias"
   done
 }
 

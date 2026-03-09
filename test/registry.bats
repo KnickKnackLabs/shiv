@@ -34,25 +34,25 @@ teardown() {
 }
 
 @test "registry: register stores path as object" {
-  shiv_register "mypackage" "/path/to/repo"
-  jq -e '.mypackage.path == "/path/to/repo"' "$SHIV_REGISTRY"
+  shiv_register "foo" "/path/to/foo"
+  jq -e '.foo.path == "/path/to/foo"' "$SHIV_REGISTRY"
 }
 
 @test "registry: register without aliases omits aliases key" {
-  shiv_register "mypackage" "/path/to/repo"
-  run jq -e '.mypackage | has("aliases")' "$SHIV_REGISTRY"
+  shiv_register "foo" "/path/to/foo"
+  run jq -e '.foo | has("aliases")' "$SHIV_REGISTRY"
   [ "$status" -ne 0 ]
 }
 
 @test "registry: register with aliases stores them" {
-  shiv_register "wallpapers" "/path/to/wallpapers" "wp" "walls"
-  jq -e '.wallpapers.aliases == ["wp", "walls"]' "$SHIV_REGISTRY"
+  shiv_register "foo" "/path/to/foo" "f" "fo"
+  jq -e '.foo.aliases == ["f", "fo"]' "$SHIV_REGISTRY"
 }
 
 @test "registry: unregister removes entry" {
-  shiv_register "mypackage" "/path/to/repo"
-  shiv_unregister "mypackage"
-  run jq -e '.mypackage' "$SHIV_REGISTRY"
+  shiv_register "foo" "/path/to/foo"
+  shiv_unregister "foo"
+  run jq -e '.foo' "$SHIV_REGISTRY"
   [ "$status" -ne 0 ]
 }
 
@@ -61,8 +61,8 @@ teardown() {
 # ============================================================================
 
 @test "registry: shiv_registry_path returns path" {
-  shiv_register "mypackage" "/path/to/repo"
-  [ "$(shiv_registry_path "mypackage")" = "/path/to/repo" ]
+  shiv_register "foo" "/path/to/foo"
+  [ "$(shiv_registry_path "foo")" = "/path/to/foo" ]
 }
 
 @test "registry: shiv_registry_path returns empty for missing" {
@@ -70,16 +70,16 @@ teardown() {
 }
 
 @test "registry: shiv_registry_aliases returns aliases" {
-  shiv_register "wallpapers" "/path/to/wallpapers" "wp" "walls"
-  mapfile -t aliases < <(shiv_registry_aliases "wallpapers")
+  shiv_register "foo" "/path/to/foo" "f" "fo"
+  mapfile -t aliases < <(shiv_registry_aliases "foo")
   [ "${#aliases[@]}" -eq 2 ]
-  [ "${aliases[0]}" = "wp" ]
-  [ "${aliases[1]}" = "walls" ]
+  [ "${aliases[0]}" = "f" ]
+  [ "${aliases[1]}" = "fo" ]
 }
 
 @test "registry: shiv_registry_aliases returns empty when none" {
-  shiv_register "mypackage" "/path/to/repo"
-  [ -z "$(shiv_registry_aliases "mypackage")" ]
+  shiv_register "foo" "/path/to/foo"
+  [ -z "$(shiv_registry_aliases "foo")" ]
 }
 
 @test "registry: shiv_registry_entries outputs name-tab-path" {
@@ -94,16 +94,16 @@ teardown() {
 }
 
 @test "registry: shiv_registry_set_aliases updates aliases" {
-  shiv_register "wallpapers" "/path/to/wallpapers" "wp"
-  shiv_registry_set_aliases "wallpapers" "wp" "walls" "w"
-  mapfile -t aliases < <(shiv_registry_aliases "wallpapers")
+  shiv_register "foo" "/path/to/foo" "f"
+  shiv_registry_set_aliases "foo" "f" "fo" "x"
+  mapfile -t aliases < <(shiv_registry_aliases "foo")
   [ "${#aliases[@]}" -eq 3 ]
 }
 
 @test "registry: shiv_registry_set_aliases with no args removes aliases" {
-  shiv_register "wallpapers" "/path/to/wallpapers" "wp"
-  shiv_registry_set_aliases "wallpapers"
-  run jq -e '.wallpapers | has("aliases")' "$SHIV_REGISTRY"
+  shiv_register "foo" "/path/to/foo" "f"
+  shiv_registry_set_aliases "foo"
+  run jq -e '.foo | has("aliases")' "$SHIV_REGISTRY"
   [ "$status" -ne 0 ]
 }
 
@@ -112,13 +112,13 @@ teardown() {
 # ============================================================================
 
 @test "resolve: finds by package name" {
-  shiv_register "wallpapers" "/path/to/wallpapers"
-  [ "$(shiv_registry_resolve "wallpapers")" = "wallpapers" ]
+  shiv_register "foo" "/path/to/foo"
+  [ "$(shiv_registry_resolve "foo")" = "foo" ]
 }
 
 @test "resolve: finds by alias" {
-  shiv_register "wallpapers" "/path/to/wallpapers" "wp"
-  [ "$(shiv_registry_resolve "wp")" = "wallpapers" ]
+  shiv_register "foo" "/path/to/foo" "f"
+  [ "$(shiv_registry_resolve "f")" = "foo" ]
 }
 
 @test "resolve: returns empty for unknown" {
@@ -131,37 +131,37 @@ teardown() {
 
 @test "symlinks: shiv_create_alias_symlinks creates symlinks" {
   mkdir -p "$SHIV_BIN_DIR"
-  shiv_create_shim "wallpapers" "$REPO_DIR"
-  shiv_create_alias_symlinks "wallpapers" "wp" "walls"
-  [ -L "$SHIV_BIN_DIR/wp" ]
-  [ -L "$SHIV_BIN_DIR/walls" ]
-  [ "$(readlink "$SHIV_BIN_DIR/wp")" = "$SHIV_BIN_DIR/wallpapers" ]
+  shiv_create_shim "foo" "$REPO_DIR"
+  shiv_create_alias_symlinks "foo" "f" "fo"
+  [ -L "$SHIV_BIN_DIR/f" ]
+  [ -L "$SHIV_BIN_DIR/fo" ]
+  [ "$(readlink "$SHIV_BIN_DIR/f")" = "foo" ]
 }
 
 @test "symlinks: shiv_remove_alias_symlinks cleans up" {
   mkdir -p "$SHIV_BIN_DIR"
-  shiv_create_shim "wallpapers" "$REPO_DIR"
-  shiv_create_alias_symlinks "wallpapers" "wp"
-  [ -L "$SHIV_BIN_DIR/wp" ]
-  shiv_remove_alias_symlinks "wallpapers" "wp"
-  [ ! -L "$SHIV_BIN_DIR/wp" ]
+  shiv_create_shim "foo" "$REPO_DIR"
+  shiv_create_alias_symlinks "foo" "f"
+  [ -L "$SHIV_BIN_DIR/f" ]
+  shiv_remove_alias_symlinks "foo" "f"
+  [ ! -L "$SHIV_BIN_DIR/f" ]
 }
 
 @test "symlinks: alias symlink is executable" {
   mkdir -p "$SHIV_BIN_DIR"
-  shiv_create_shim "wallpapers" "$REPO_DIR"
-  shiv_create_alias_symlinks "wallpapers" "wp"
-  [ -x "$SHIV_BIN_DIR/wp" ]
+  shiv_create_shim "foo" "$REPO_DIR"
+  shiv_create_alias_symlinks "foo" "f"
+  [ -x "$SHIV_BIN_DIR/f" ]
 }
 
 @test "symlinks: removing shim leaves symlinks dangling" {
   mkdir -p "$SHIV_BIN_DIR"
-  shiv_create_shim "wallpapers" "$REPO_DIR"
-  shiv_create_alias_symlinks "wallpapers" "wp"
-  rm "$SHIV_BIN_DIR/wallpapers"
+  shiv_create_shim "foo" "$REPO_DIR"
+  shiv_create_alias_symlinks "foo" "f"
+  rm "$SHIV_BIN_DIR/foo"
   # Symlink still exists but target is gone
-  [ -L "$SHIV_BIN_DIR/wp" ]
-  [ ! -e "$SHIV_BIN_DIR/wp" ]
+  [ -L "$SHIV_BIN_DIR/f" ]
+  [ ! -e "$SHIV_BIN_DIR/f" ]
 }
 
 # ============================================================================
@@ -175,11 +175,11 @@ teardown() {
   check-jsonschema --schemafile "$REPO_DIR/registry.schema.json" "$SHIV_REGISTRY"
 }
 
-@test "schema: registry with package is valid" {
+@test "schema: registry with package and aliases is valid" {
   if ! command -v check-jsonschema &>/dev/null; then
     skip "check-jsonschema not found"
   fi
-  shiv_register "wallpapers" "/path/to/wallpapers" "wp"
+  shiv_register "foo" "/path/to/foo" "f"
   check-jsonschema --schemafile "$REPO_DIR/registry.schema.json" "$SHIV_REGISTRY"
 }
 
@@ -187,6 +187,6 @@ teardown() {
   if ! command -v check-jsonschema &>/dev/null; then
     skip "check-jsonschema not found"
   fi
-  shiv_register "shimmer" "/path/to/shimmer"
+  shiv_register "foo" "/path/to/foo"
   check-jsonschema --schemafile "$REPO_DIR/registry.schema.json" "$SHIV_REGISTRY"
 }
