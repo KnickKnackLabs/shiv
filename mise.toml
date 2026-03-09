@@ -1,3 +1,4 @@
 [tools]
 bats = "1.13.0"
+pipx = "1.8.0"
 "pipx:check-jsonschema" = "0.36.0"
