@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #MISE description="Print the install path of a managed tool"
-#USAGE arg "<name>" help="Command name to look up"
+#USAGE arg "<name>" help="Package name or alias to look up"
 set -eo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -10,7 +10,16 @@ NAME="${usage_name}"
 
 shiv_init_registry
 
-PATH_VAL=$(jq -r --arg n "$NAME" '.[$n] // empty' "$SHIV_REGISTRY")
+# Try direct lookup, then resolve as alias
+PATH_VAL=$(shiv_registry_path "$NAME")
+
+if [ -z "$PATH_VAL" ]; then
+  # Maybe it's an alias
+  RESOLVED=$(shiv_registry_resolve "$NAME")
+  if [ -n "$RESOLVED" ]; then
+    PATH_VAL=$(shiv_registry_path "$RESOLVED")
+  fi
+fi
 
 if [ -z "$PATH_VAL" ]; then
   echo "shiv: '$NAME' is not a managed tool" >&2

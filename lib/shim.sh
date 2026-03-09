@@ -1,35 +1,18 @@
 #!/usr/bin/env bash
 # shiv shim generation — the core mechanism
 #
-# This file contains the functions that create and manage shims.
-# It's sourced by shiv's own tasks and can be used standalone.
+# This file creates and manages shims, and sources the other lib files
+# for registry, cache, and source operations.
+
+REPO_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+source "$REPO_LIB_DIR/registry.sh"
+source "$REPO_LIB_DIR/cache.sh"
+source "$REPO_LIB_DIR/sources.sh"
 
 SHIV_BIN_DIR="${SHIV_BIN_DIR:-$HOME/.local/bin}"
 SHIV_DATA_DIR="${SHIV_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/shiv}"
 SHIV_PACKAGES_DIR="${SHIV_PACKAGES_DIR:-$SHIV_DATA_DIR/packages}"
-SHIV_CONFIG_DIR="${SHIV_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/shiv}"
-SHIV_CACHE_DIR="${SHIV_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/shiv}"
-SHIV_REGISTRY="${SHIV_REGISTRY:-$SHIV_CONFIG_DIR/registry.json}"
-SHIV_SOURCES_DIR="${SHIV_SOURCES_DIR:-$SHIV_CONFIG_DIR/sources}"
-
-# SHIV_SOURCES: comma-delimited list of sources.json files to search.
-# If not set by the user, auto-discover from SHIV_SOURCES_DIR.
-if [ -z "$SHIV_SOURCES" ] && [ -d "$SHIV_SOURCES_DIR" ]; then
-  SHIV_SOURCES=""
-  for _sf in "$SHIV_SOURCES_DIR"/*.json; do
-    [ -f "$_sf" ] || continue
-    SHIV_SOURCES="${SHIV_SOURCES:+$SHIV_SOURCES,}$_sf"
-  done
-  unset _sf
-fi
-
-# Ensure registry exists
-shiv_init_registry() {
-  mkdir -p "$(dirname "$SHIV_REGISTRY")"
-  if [ ! -f "$SHIV_REGISTRY" ]; then
-    echo '{}' > "$SHIV_REGISTRY"
-  fi
-}
 
 # Create a shim for a tool
 shiv_create_shim() {
@@ -57,90 +40,24 @@ SCRIPT
   chmod +x "$SHIV_BIN_DIR/$name"
 }
 
-# Register a tool in the registry
-shiv_register() {
-  local name="$1" repo_dir="$2"
-  shiv_init_registry
-  local tmp
-  tmp=$(jq --arg n "$name" --arg p "$repo_dir" '. + {($n): $p}' "$SHIV_REGISTRY")
-  echo "$tmp" > "$SHIV_REGISTRY"
-}
-
-# Unregister a tool
-shiv_unregister() {
+# Create alias symlinks for a package (relative, same directory)
+shiv_create_alias_symlinks() {
   local name="$1"
-  shiv_init_registry
-  local tmp
-  tmp=$(jq --arg n "$name" 'del(.[$n])' "$SHIV_REGISTRY")
-  echo "$tmp" > "$SHIV_REGISTRY"
+  shift
+  local aliases=("$@")
+  for alias in "${aliases[@]}"; do
+    ln -sf "$name" "$SHIV_BIN_DIR/$alias"
+  done
 }
 
-# Look up a package name across all sources (SHIV_SOURCES, then repo fallback)
-# Prints the GitHub repo slug (e.g. "KnickKnackLabs/shimmer") or returns 1
-shiv_lookup() {
-  local name="$1" result=""
-
-  if [ -n "$SHIV_SOURCES" ]; then
-    IFS=',' read -ra _source_files <<< "$SHIV_SOURCES"
-    for sf in "${_source_files[@]}"; do
-      sf="${sf## }"; sf="${sf%% }"
-      [ -f "$sf" ] || continue
-      result=$(jq -r --arg n "$name" '.[$n] // empty' "$sf")
-      [ -n "$result" ] && echo "$result" && return 0
-    done
-  fi
-
-  # Fallback: repo-level sources.json
-  local repo_sources
-  repo_sources="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/sources.json"
-  if [ -f "$repo_sources" ]; then
-    result=$(jq -r --arg n "$name" '.[$n] // empty' "$repo_sources")
-    [ -n "$result" ] && echo "$result" && return 0
-  fi
-
-  return 1
-}
-
-# List all available packages across all sources
-shiv_list_sources() {
-  local seen=()
-
-  if [ -n "$SHIV_SOURCES" ]; then
-    IFS=',' read -ra _source_files <<< "$SHIV_SOURCES"
-    for sf in "${_source_files[@]}"; do
-      sf="${sf## }"; sf="${sf%% }"
-      [ -f "$sf" ] || continue
-      jq -r 'to_entries[] | "\(.key) \(.value)"' "$sf"
-    done
-  fi
-
-  local repo_sources
-  repo_sources="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/sources.json"
-  if [ -f "$repo_sources" ]; then
-    jq -r 'to_entries[] | "\(.key) \(.value)"' "$repo_sources"
-  fi
-}
-
-# Cache task list for a tool (name<TAB>description per line)
-# Writes atomically — only replaces cache if new content is non-empty,
-# so a failed mise invocation doesn't leave an empty cache file.
-shiv_cache_tasks() {
-  local name="$1" repo_dir="$2"
-  local cache="$SHIV_CACHE_DIR/completions/$name.cache"
-  local tmp="$cache.tmp"
-  mkdir -p "$SHIV_CACHE_DIR/completions"
-  mise tasks --json -C "$repo_dir" 2>/dev/null \
-    | jq -r '.[] | select(.hide == false) | "\(.name)\t\(.description)"' \
-    > "$tmp"
-  if [ -s "$tmp" ]; then
-    mv "$tmp" "$cache"
-  else
-    rm -f "$tmp"
-  fi
-}
-
-# Remove cached tasks for a tool
-shiv_cache_remove() {
+# Remove alias symlinks for a package (only if they point to the expected target)
+shiv_remove_alias_symlinks() {
   local name="$1"
-  rm -f "$SHIV_CACHE_DIR/completions/$name.cache"
+  shift
+  local aliases=("$@")
+  for alias in "${aliases[@]}"; do
+    if [ -L "$SHIV_BIN_DIR/$alias" ] && [ "$(readlink "$SHIV_BIN_DIR/$alias")" = "$name" ]; then
+      rm -f "$SHIV_BIN_DIR/$alias"
+    fi
+  done
 }

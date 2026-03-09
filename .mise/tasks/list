@@ -16,8 +16,9 @@ fi
 
 echo "Managed tools ($COUNT):"
 echo ""
-printf "  %-15s %s\n" "COMMAND" "REPO"
-printf "  %-15s %s\n" "-------" "----"
-jq -r 'to_entries[] | "\(.key) \(.value)"' "$SHIV_REGISTRY" | while read -r name repo; do
-  printf "  %-15s %s\n" "$name" "$repo"
+printf "  %-15s %-10s %s\n" "PACKAGE" "ALIASES" "REPO"
+printf "  %-15s %-10s %s\n" "-------" "-------" "----"
+shiv_registry_entries | while IFS=$'\t' read -r name repo; do
+  aliases=$(shiv_registry_aliases "$name" | paste -sd, -)
+  printf "  %-15s %-10s %s\n" "$name" "${aliases:--}" "$repo"
 done

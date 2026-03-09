@@ -248,8 +248,9 @@ if (-not (Test-Path $registryFile)) {
 
 # Register shiv in its own registry
 $registry = Get-Content $registryFile | ConvertFrom-Json
-$registry | Add-Member -NotePropertyName 'shiv' -NotePropertyValue $ShivInstallPath -Force
-$registry | ConvertTo-Json | Set-Content $registryFile -Encoding UTF8
+$shivEntry = [PSCustomObject]@{ path = $ShivInstallPath }
+$registry | Add-Member -NotePropertyName 'shiv' -NotePropertyValue $shivEntry -Force
+$registry | ConvertTo-Json -Depth 3 | Set-Content $registryFile -Encoding UTF8
 
 Chicle-Log --success "shiv shim created at $shimPs1"
 

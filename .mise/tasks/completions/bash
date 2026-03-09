@@ -24,10 +24,11 @@ __shiv_rebuild_cache() {
 
 HEADER
 
-jq -r 'to_entries[] | "\(.key) \(.value)"' "$SHIV_REGISTRY" | while read -r name repo; do
-  cache_file="$CACHE_BASE/$name.cache"
-
-  func_name="${name//[^a-zA-Z0-9_]/_}"
+# Emit completion function for a command name pointing at a repo
+_shiv_emit_bash_completion() {
+  local cmd="$1" name="$2" repo="$3"
+  local cache_file="$CACHE_BASE/$name.cache"
+  local func_name="${cmd//[^a-zA-Z0-9_]/_}"
 
   cat <<EOF
 _shiv_complete_${func_name}() {
@@ -40,7 +41,18 @@ _shiv_complete_${func_name}() {
     COMPREPLY=( \$(compgen -W "\$(cut -f1 "\$cache")" -- "\$cur") )
   fi
 }
-complete -F _shiv_complete_${func_name} ${name}
+complete -F _shiv_complete_${func_name} ${cmd}
 
 EOF
+}
+
+shiv_registry_entries | while IFS=$'\t' read -r name repo; do
+  # Completion for the package name
+  _shiv_emit_bash_completion "$name" "$name" "$repo"
+
+  # Completions for aliases (reuse the same cache)
+  while IFS= read -r alias; do
+    [ -n "$alias" ] || continue
+    _shiv_emit_bash_completion "$alias" "$name" "$repo"
+  done < <(shiv_registry_aliases "$name")
 done

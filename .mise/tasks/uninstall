@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #MISE description="Remove a tool's shim and deregister it"
-#USAGE arg "<name>" help="Command name to remove"
+#USAGE arg "<name>" help="Package name to remove"
 set -eo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -11,6 +11,17 @@ NAME="${usage_name}"
 if [ "$NAME" = "shiv" ]; then
   echo "Can't uninstall shiv — that would be pulling your own plug"
   exit 1
+fi
+
+shiv_init_registry
+
+# Resolve aliases before removing anything
+mapfile -t ALIASES < <(shiv_registry_aliases "$NAME")
+
+# Remove alias symlinks
+if [ ${#ALIASES[@]} -gt 0 ]; then
+  shiv_remove_alias_symlinks "$NAME" "${ALIASES[@]}"
+  echo "Removed aliases: ${ALIASES[*]}"
 fi
 
 # Remove shim
