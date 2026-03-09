@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # shiv sources — package index lookup
+# Depends on SHIV_CONFIG_DIR being set (by registry.sh, sourced first)
 
-SHIV_CONFIG_DIR="${SHIV_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/shiv}"
 SHIV_SOURCES_DIR="${SHIV_SOURCES_DIR:-$SHIV_CONFIG_DIR/sources}"
 
 # SHIV_SOURCES: comma-delimited list of sources.json files to search.

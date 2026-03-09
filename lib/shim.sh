@@ -50,12 +50,14 @@ shiv_create_alias_symlinks() {
   done
 }
 
-# Remove alias symlinks for a package
+# Remove alias symlinks for a package (only if they point to the expected target)
 shiv_remove_alias_symlinks() {
   local name="$1"
   shift
   local aliases=("$@")
   for alias in "${aliases[@]}"; do
-    rm -f "$SHIV_BIN_DIR/$alias"
+    if [ -L "$SHIV_BIN_DIR/$alias" ] && [ "$(readlink "$SHIV_BIN_DIR/$alias")" = "$name" ]; then
+      rm -f "$SHIV_BIN_DIR/$alias"
+    fi
   done
 }
