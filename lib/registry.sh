@@ -31,6 +31,22 @@ shiv_register() {
 
   shiv_init_registry
 
+  # Check for alias collisions
+  for alias in "${aliases[@]}"; do
+    # Alias shadows an existing package name?
+    if [ -n "$(shiv_registry_path "$alias")" ]; then
+      echo "Error: alias '$alias' conflicts with existing package '$alias'" >&2
+      return 1
+    fi
+    # Alias already claimed by another package?
+    local owner
+    owner=$(shiv_registry_resolve "$alias")
+    if [ -n "$owner" ] && [ "$owner" != "$name" ]; then
+      echo "Error: alias '$alias' already used by package '$owner'" >&2
+      return 1
+    fi
+  done
+
   local tmp
   if [ ${#aliases[@]} -eq 0 ]; then
     tmp=$(jq --arg n "$name" --arg p "$repo_dir" \
@@ -70,6 +86,20 @@ shiv_registry_set_aliases() {
   local name="$1"
   shift
   local aliases=("$@")
+
+  # Check for alias collisions
+  for alias in "${aliases[@]}"; do
+    if [ -n "$(shiv_registry_path "$alias")" ]; then
+      echo "Error: alias '$alias' conflicts with existing package '$alias'" >&2
+      return 1
+    fi
+    local owner
+    owner=$(shiv_registry_resolve "$alias")
+    if [ -n "$owner" ] && [ "$owner" != "$name" ]; then
+      echo "Error: alias '$alias' already used by package '$owner'" >&2
+      return 1
+    fi
+  done
 
   local tmp
   if [ ${#aliases[@]} -eq 0 ]; then

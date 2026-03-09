@@ -126,6 +126,46 @@ teardown() {
 }
 
 # ============================================================================
+# Alias collision detection
+# ============================================================================
+
+@test "collision: alias that shadows a package name is rejected" {
+  shiv_register "bar" "/path/to/bar"
+  run shiv_register "foo" "/path/to/foo" "bar"
+  [ "$status" -ne 0 ]
+  echo "$output" | grep -q "conflicts with existing package"
+}
+
+@test "collision: alias already claimed by another package is rejected" {
+  shiv_register "foo" "/path/to/foo" "x"
+  run shiv_register "bar" "/path/to/bar" "x"
+  [ "$status" -ne 0 ]
+  echo "$output" | grep -q "already used by package"
+}
+
+@test "collision: re-registering same package with same alias succeeds" {
+  shiv_register "foo" "/path/to/foo" "f"
+  run shiv_register "foo" "/path/to/foo" "f"
+  [ "$status" -eq 0 ]
+}
+
+@test "collision: set_aliases rejects alias shadowing a package" {
+  shiv_register "foo" "/path/to/foo"
+  shiv_register "bar" "/path/to/bar"
+  run shiv_registry_set_aliases "foo" "bar"
+  [ "$status" -ne 0 ]
+  echo "$output" | grep -q "conflicts with existing package"
+}
+
+@test "collision: set_aliases rejects alias claimed by another package" {
+  shiv_register "foo" "/path/to/foo" "x"
+  shiv_register "bar" "/path/to/bar"
+  run shiv_registry_set_aliases "bar" "x"
+  [ "$status" -ne 0 ]
+  echo "$output" | grep -q "already used by package"
+}
+
+# ============================================================================
 # Alias symlinks
 # ============================================================================
 
