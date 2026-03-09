@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/KnickKnackLabs/shiv/main/registry.schema.json",
+  "title": "shiv registry",
+  "description": "Tracks installed packages, their paths, and optional command aliases.",
+  "type": "object",
+  "additionalProperties": {
+    "$ref": "#/$defs/package"
+  },
+  "$defs": {
+    "package": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Absolute path to the package's repository directory."
+        },
+        "aliases": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_][a-zA-Z0-9_.-]*$"
+          },
+          "uniqueItems": true,
+          "description": "Optional command aliases. Each alias gets a symlink in the bin directory."
+        }
+      },
+      "required": ["path"],
+      "additionalProperties": false
+    }
+  }
+}

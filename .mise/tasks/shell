@@ -7,7 +7,7 @@ source "$REPO_DIR/lib/shim.sh"
 
 # Self-hosting: bootstrap shiv into packages/ if not already registered
 shiv_init_registry
-EXISTING_SHIV=$(jq -r '.shiv // empty' "$SHIV_REGISTRY")
+EXISTING_SHIV=$(shiv_registry_path "shiv")
 if [ -z "$EXISTING_SHIV" ]; then
   # First time: shiv isn't registered yet — bootstrap it
   SHIV_CANONICAL="$SHIV_PACKAGES_DIR/shiv"
@@ -37,7 +37,7 @@ if [ -n "$SHIV_SOURCES" ]; then
 fi
 
 # Auto-include shell completions
-SHIV_PATH=$(jq -r '.shiv // empty' "$SHIV_REGISTRY")
+SHIV_PATH=$(shiv_registry_path "shiv")
 if [ -n "$SHIV_PATH" ]; then
   DETECTED_SHELL="$(basename "${SHELL:-bash}")"
   case "$DETECTED_SHELL" in
@@ -46,4 +46,3 @@ if [ -n "$SHIV_PATH" ]; then
       ;;
   esac
 fi
-

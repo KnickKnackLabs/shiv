@@ -16,7 +16,7 @@ fi
 
 echo "Updating $COUNT tool(s)..."
 
-jq -r 'to_entries[] | "\(.key) \(.value)"' "$SHIV_REGISTRY" | while read -r name repo; do
+shiv_registry_entries | while IFS=$'\t' read -r name repo; do
   if [ -d "$repo" ]; then
     if git -C "$repo" pull --ff-only >/dev/null 2>&1; then
       shiv_create_shim "$name" "$repo"
@@ -26,6 +26,13 @@ jq -r 'to_entries[] | "\(.key) \(.value)"' "$SHIV_REGISTRY" | while read -r name
       echo "  ⚠ $name → $repo (pull failed, shim refreshed)"
     fi
     shiv_cache_tasks "$name" "$repo"
+
+    # Recreate alias symlinks
+    mapfile -t aliases < <(shiv_registry_aliases "$name")
+    if [ ${#aliases[@]} -gt 0 ]; then
+      shiv_create_alias_symlinks "$name" "${aliases[@]}"
+      echo "    aliases: ${aliases[*]}"
+    fi
   else
     echo "  ✗ $name — repo not found at $repo (skipped)"
   fi

@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+#MISE description="Validate registry.json against the schema"
+set -eo pipefail
+
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+source "$REPO_DIR/lib/registry.sh"
+
+shiv_init_registry
+
+if ! command -v check-jsonschema &>/dev/null; then
+  echo "Error: check-jsonschema not found" >&2
+  echo "Install with: pipx install check-jsonschema" >&2
+  exit 1
+fi
+
+check-jsonschema --schemafile "$REPO_DIR/registry.schema.json" "$SHIV_REGISTRY"
+echo "✓ Registry is valid"

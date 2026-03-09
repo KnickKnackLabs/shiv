@@ -26,12 +26,14 @@ end
 
 HEADER
 
-jq -r 'to_entries[] | "\(.key) \(.value)"' "$SHIV_REGISTRY" | while read -r name repo; do
-  cache_file="$CACHE_BASE/$name.cache"
+# Emit completion block for a command name pointing at a repo
+_shiv_emit_fish_completion() {
+  local cmd="$1" name="$2" repo="$3"
+  local cache_file="$CACHE_BASE/$name.cache"
 
   cat <<EOF
-# completions for: ${name}
-complete -c ${name} -f -a '(begin
+# completions for: ${cmd}
+complete -c ${cmd} -f -a '(begin
   set -l cache "${cache_file}"
   if not test -s "\$cache"
     __shiv_rebuild_cache "$name" "$repo" "\$cache"
@@ -42,4 +44,13 @@ complete -c ${name} -f -a '(begin
 end)'
 
 EOF
+}
+
+shiv_registry_entries | while IFS=$'\t' read -r name repo; do
+  _shiv_emit_fish_completion "$name" "$name" "$repo"
+
+  while IFS= read -r alias; do
+    [ -n "$alias" ] || continue
+    _shiv_emit_fish_completion "$alias" "$name" "$repo"
+  done < <(shiv_registry_aliases "$name")
 done

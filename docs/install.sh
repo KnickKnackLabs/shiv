@@ -290,7 +290,7 @@ if [ ! -f "$SHIV_CONFIG_DIR/registry.json" ]; then
 fi
 
 # Register shiv in its own registry
-TMP=$(jq --arg p "$SHIV_INSTALL_PATH" '. + {"shiv": $p}' "$SHIV_CONFIG_DIR/registry.json")
+TMP=$(jq --arg p "$SHIV_INSTALL_PATH" '. + {"shiv": {"path": $p}}' "$SHIV_CONFIG_DIR/registry.json")
 echo "$TMP" > "$SHIV_CONFIG_DIR/registry.json"
 
 chicle_log --success "shiv shim created at $SHIV_BIN_DIR/shiv"
