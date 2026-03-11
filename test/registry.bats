@@ -209,24 +209,24 @@ teardown() {
 # ============================================================================
 
 @test "schema: empty registry is valid" {
-  if ! command -v check-jsonschema &>/dev/null; then
-    skip "check-jsonschema not found"
+  if ! command -v jsonschema &>/dev/null; then
+    skip "jsonschema not found"
   fi
-  check-jsonschema --schemafile "$REPO_DIR/registry.schema.json" "$SHIV_REGISTRY"
+  jsonschema validate "$REPO_DIR/registry.schema.json" "$SHIV_REGISTRY"
 }
 
 @test "schema: registry with package and aliases is valid" {
-  if ! command -v check-jsonschema &>/dev/null; then
-    skip "check-jsonschema not found"
+  if ! command -v jsonschema &>/dev/null; then
+    skip "jsonschema not found"
   fi
   shiv_register "foo" "/path/to/foo" "f"
-  check-jsonschema --schemafile "$REPO_DIR/registry.schema.json" "$SHIV_REGISTRY"
+  jsonschema validate "$REPO_DIR/registry.schema.json" "$SHIV_REGISTRY"
 }
 
 @test "schema: registry without aliases is valid" {
-  if ! command -v check-jsonschema &>/dev/null; then
-    skip "check-jsonschema not found"
+  if ! command -v jsonschema &>/dev/null; then
+    skip "jsonschema not found"
   fi
   shiv_register "foo" "/path/to/foo"
-  check-jsonschema --schemafile "$REPO_DIR/registry.schema.json" "$SHIV_REGISTRY"
+  jsonschema validate "$REPO_DIR/registry.schema.json" "$SHIV_REGISTRY"
 }

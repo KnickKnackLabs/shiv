@@ -8,14 +8,14 @@ source "$REPO_DIR/lib/shim.sh"
 shiv_init_registry
 
 # Validate registry schema
-if command -v check-jsonschema &>/dev/null; then
-  if check-jsonschema --schemafile "$REPO_DIR/registry.schema.json" "$SHIV_REGISTRY" 2>/dev/null; then
+if command -v jsonschema &>/dev/null; then
+  if jsonschema validate "$REPO_DIR/registry.schema.json" "$SHIV_REGISTRY" 2>/dev/null; then
     echo "✓ Registry schema valid"
   else
     echo "✗ Registry schema invalid — run 'shiv registry:validate' for details"
   fi
 else
-  echo "- Registry schema check skipped (check-jsonschema not found)"
+  echo "- Registry schema check skipped (jsonschema not found)"
 fi
 echo ""
 
