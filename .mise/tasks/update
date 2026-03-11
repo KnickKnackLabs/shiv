@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-#MISE description="Refresh all shims from the registry"
+#MISE description="Pull latest and refresh shims — optionally for a single package"
+#USAGE arg "[name]" help="Package to update (default: all)"
 set -eo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -7,35 +8,75 @@ source "$REPO_DIR/lib/shim.sh"
 
 shiv_init_registry
 
-COUNT=$(jq 'length' "$SHIV_REGISTRY")
+TARGET="${usage_name:-}"
 
-if [ "$COUNT" -eq 0 ]; then
-  echo "No tools registered."
-  exit 0
-fi
+# Update a single package
+update_one() {
+  local name="$1"
+  local repo
+  repo=$(shiv_registry_path "$name")
 
-echo "Updating $COUNT tool(s)..."
-
-shiv_registry_entries | while IFS=$'\t' read -r name repo; do
-  if [ -d "$repo" ]; then
-    if git -C "$repo" pull --ff-only >/dev/null 2>&1; then
-      shiv_create_shim "$name" "$repo"
-      echo "  ✓ $name → $repo"
-    else
-      shiv_create_shim "$name" "$repo"
-      echo "  ⚠ $name → $repo (pull failed, shim refreshed)"
+  # If not a direct package name, try resolving as alias
+  if [ -z "$repo" ]; then
+    local resolved
+    resolved=$(shiv_registry_resolve "$name")
+    if [ -n "$resolved" ]; then
+      name="$resolved"
+      repo=$(shiv_registry_path "$name")
     fi
-    shiv_cache_tasks "$name" "$repo"
+  fi
 
-    # Recreate alias symlinks
-    mapfile -t aliases < <(shiv_registry_aliases "$name")
-    if [ ${#aliases[@]} -gt 0 ]; then
-      shiv_create_alias_symlinks "$name" "${aliases[@]}"
-      echo "    aliases: ${aliases[*]}"
+  if [ -z "$repo" ]; then
+    echo "Error: '$1' is not a registered package or alias" >&2
+    return 1
+  fi
+
+  if [ ! -d "$repo" ]; then
+    echo "  ✗ $name — repo not found at $repo" >&2
+    return 1
+  fi
+
+  local before after output
+  before=$(git -C "$repo" rev-parse --short HEAD 2>/dev/null || echo "unknown")
+
+  if output=$(git -C "$repo" pull --ff-only 2>&1); then
+    after=$(git -C "$repo" rev-parse --short HEAD 2>/dev/null || echo "unknown")
+    shiv_create_shim "$name" "$repo"
+    if [ "$before" = "$after" ]; then
+      echo "  ✓ $name  already up to date"
+    else
+      local count
+      count=$(git -C "$repo" rev-list --count "$before".."$after" 2>/dev/null || echo "?")
+      echo "  ✓ $name  $before..$after ($count commits)"
     fi
   else
-    echo "  ✗ $name — repo not found at $repo (skipped)"
+    shiv_create_shim "$name" "$repo"
+    echo "  ⚠ $name  pull failed, shim refreshed"
+    echo "    $output" | head -3 | sed 's/^/    /'
   fi
-done
+
+  shiv_cache_tasks "$name" "$repo"
+
+  # Recreate alias symlinks
+  mapfile -t aliases < <(shiv_registry_aliases "$name")
+  if [ ${#aliases[@]} -gt 0 ]; then
+    shiv_create_alias_symlinks "$name" "${aliases[@]}"
+  fi
+}
+
+if [ -n "$TARGET" ]; then
+  echo "Updating $TARGET..."
+  update_one "$TARGET" || exit 1
+else
+  COUNT=$(jq 'length' "$SHIV_REGISTRY")
+  if [ "$COUNT" -eq 0 ]; then
+    echo "No tools registered."
+    exit 0
+  fi
+  echo "Updating $COUNT tool(s)..."
+  shiv_registry_entries | while IFS=$'\t' read -r name repo; do
+    update_one "$name" || true
+  done
+fi
 
 echo "Done."
