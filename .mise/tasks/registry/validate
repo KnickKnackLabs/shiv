@@ -7,11 +7,11 @@ source "$REPO_DIR/lib/registry.sh"
 
 shiv_init_registry
 
-if ! command -v check-jsonschema &>/dev/null; then
-  echo "Error: check-jsonschema not found" >&2
-  echo "Install with: pipx install check-jsonschema" >&2
+if ! command -v jsonschema &>/dev/null; then
+  echo "Error: jsonschema not found" >&2
+  echo "Install with: mise install jsonschema" >&2
   exit 1
 fi
 
-check-jsonschema --schemafile "$REPO_DIR/registry.schema.json" "$SHIV_REGISTRY"
+jsonschema validate "$REPO_DIR/registry.schema.json" "$SHIV_REGISTRY"
 echo "✓ Registry is valid"
