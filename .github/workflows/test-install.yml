@@ -12,6 +12,9 @@ on:
       - docs/install.ps1
   workflow_dispatch:
 
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
 jobs:
   test-bash:
     strategy:
