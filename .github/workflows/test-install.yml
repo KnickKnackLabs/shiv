@@ -63,8 +63,10 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Test install in ${{ matrix.image }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          docker run --rm -v "$PWD/docs/install.sh:/install.sh:ro" ${{ matrix.image }} sh -c '
+          docker run --rm -e GITHUB_TOKEN="$GITHUB_TOKEN" -v "$PWD/docs/install.sh:/install.sh:ro" ${{ matrix.image }} sh -c '
             if command -v apk >/dev/null 2>&1; then
               apk update --quiet >/dev/null 2>&1
               apk add --quiet bash curl git jq >/dev/null 2>&1
