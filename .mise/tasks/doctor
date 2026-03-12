@@ -7,48 +7,80 @@ source "$REPO_DIR/lib/shim.sh"
 
 shiv_init_registry
 
-# Validate registry schema
-if command -v jsonschema &>/dev/null; then
-  if jsonschema validate "$REPO_DIR/registry.schema.json" "$SHIV_REGISTRY" 2>/dev/null; then
-    echo "✓ Registry schema valid"
-  else
-    echo "✗ Registry schema invalid — run 'shiv registry:validate' for details"
-  fi
-else
-  echo "- Registry schema check skipped (jsonschema not found)"
-fi
-echo ""
+SEP='|'
+HAS_ISSUES=false
+
+# ── Header ──────────────────────────────────────────────────────
 
 COUNT=$(jq 'length' "$SHIV_REGISTRY")
 
+# Schema validation
+schema_status="✓ valid ($COUNT packages)"
+if command -v jsonschema &>/dev/null; then
+  if ! jsonschema validate "$REPO_DIR/registry.schema.json" "$SHIV_REGISTRY" 2>/dev/null; then
+    schema_status="✗ invalid — run 'shiv registry:validate'"
+    HAS_ISSUES=true
+  fi
+else
+  schema_status="- skipped (jsonschema not found)"
+fi
+
+# Bin dir check
+bin_status="✓ $SHIV_BIN_DIR"
+if [ ! -d "$SHIV_BIN_DIR" ]; then
+  bin_status="✗ $SHIV_BIN_DIR (not found)"
+  HAS_ISSUES=true
+fi
+
+echo ""
+gum style --bold "  SHIV HEALTH"
+echo ""
+{
+  echo "Registry${SEP}${schema_status}"
+  echo "Bin dir${SEP}${bin_status}"
+} | gum table -s "$SEP" -c "CHECK,STATUS" -p --border normal
+
 if [ "$COUNT" -eq 0 ]; then
-  echo "No tools registered."
+  echo ""
+  echo "  No tools registered."
   exit 0
 fi
 
-echo "Checking $COUNT tool(s)..."
+# ── Per-package checks ──────────────────────────────────────────
+
+echo ""
+gum style --bold "  PACKAGES"
 echo ""
 
-shiv_registry_entries | while IFS=$'\t' read -r name repo; do
+rows=()
+issue_names=()
+issue_details=()
+
+while IFS=$'\t' read -r name repo; do
   issues=""
+  issue_count=0
 
   # Check repo exists
   if [ ! -d "$repo" ]; then
-    issues="${issues}  repo not found at $repo\n"
+    issues+="    ✗ repo not found at $repo"$'\n'
+    issue_count=$((issue_count + 1))
   fi
 
-  # Check shim exists
+  # Check shim exists and is managed by shiv
   if [ ! -f "$SHIV_BIN_DIR/$name" ]; then
-    issues="${issues}  shim missing at $SHIV_BIN_DIR/$name\n"
+    issues+="    ✗ shim missing at $SHIV_BIN_DIR/$name"$'\n'
+    issue_count=$((issue_count + 1))
   elif ! grep -q "# managed by shiv" "$SHIV_BIN_DIR/$name" 2>/dev/null; then
-    issues="${issues}  shim exists but not managed by shiv\n"
+    issues+="    ✗ shim exists but not managed by shiv"$'\n'
+    issue_count=$((issue_count + 1))
   fi
 
   # Check shim points to right repo
   if [ -f "$SHIV_BIN_DIR/$name" ]; then
-    shim_repo=$(grep '^REPO=' "$SHIV_BIN_DIR/$name" 2>/dev/null | cut -d'"' -f2)
+    shim_repo=$(grep '^REPO=' "$SHIV_BIN_DIR/$name" 2>/dev/null | cut -d'"' -f2 || true)
     if [ -n "$shim_repo" ] && [ "$shim_repo" != "$repo" ]; then
-      issues="${issues}  shim points to $shim_repo but registry says $repo\n"
+      issues+="    ✗ shim points to $shim_repo but registry says $repo"$'\n'
+      issue_count=$((issue_count + 1))
     fi
   fi
 
@@ -56,19 +88,36 @@ shiv_registry_entries | while IFS=$'\t' read -r name repo; do
   mapfile -t aliases < <(shiv_registry_aliases "$name")
   for alias in "${aliases[@]}"; do
     if [ ! -L "$SHIV_BIN_DIR/$alias" ]; then
-      issues="${issues}  alias symlink missing: $SHIV_BIN_DIR/$alias\n"
+      issues+="    ✗ alias symlink missing: $SHIV_BIN_DIR/$alias"$'\n'
+      issue_count=$((issue_count + 1))
     elif [ "$(readlink "$SHIV_BIN_DIR/$alias")" != "$name" ]; then
-      issues="${issues}  alias symlink $alias points to wrong target\n"
+      issues+="    ✗ alias symlink $alias points to wrong target"$'\n'
+      issue_count=$((issue_count + 1))
     fi
   done
 
-  if [ -z "$issues" ]; then
-    echo "  ✓ $name"
+  if [ "$issue_count" -gt 0 ]; then
+    rows+=("${name}${SEP}✗ (${issue_count})")
+    issue_names+=("$name")
+    issue_details+=("$issues")
+    HAS_ISSUES=true
   else
-    echo "  ✗ $name"
-    printf "$issues"
+    rows+=("${name}${SEP}✓")
   fi
-done
+done < <(shiv_registry_entries)
 
-echo ""
-echo "Run 'shiv install <name> <path>' to fix any issues."
+# Package table
+printf '%s\n' "${rows[@]}" | gum table -s "$SEP" -c "PACKAGE,STATUS" -p --border normal
+
+# Issue details
+if [ ${#issue_names[@]} -gt 0 ]; then
+  echo ""
+  for i in "${!issue_names[@]}"; do
+    gum style --bold "  ${issue_names[$i]}:"
+    printf '%s' "${issue_details[$i]}"
+  done
+fi
+
+if [ "$HAS_ISSUES" = "true" ]; then
+  exit 1
+fi
