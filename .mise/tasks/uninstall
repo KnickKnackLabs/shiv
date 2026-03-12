@@ -20,6 +20,12 @@ fi
 
 shiv_init_registry
 
+# Check package is registered
+if [ -z "$(shiv_registry_path "$NAME")" ]; then
+  echo "  ✗ '$NAME' is not a registered package" >&2
+  exit 1
+fi
+
 # Self-uninstall safety check
 if [ "$NAME" = "shiv" ] && [ "$FORCE" != "true" ]; then
   OTHER_COUNT=$(jq '[keys[] | select(. != "shiv")] | length' "$SHIV_REGISTRY")
