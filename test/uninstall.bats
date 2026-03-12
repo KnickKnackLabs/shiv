@@ -227,6 +227,55 @@ MOCK
 }
 
 # ============================================================================
+# Package directory cleanup
+# ============================================================================
+
+@test "uninstall: removes clean index-installed package directory" {
+  create_installed_package "alpha"
+  [ -d "$SHIV_PACKAGES_DIR/alpha" ]
+
+  run_uninstall "alpha" "true"
+  [ ! -d "$SHIV_PACKAGES_DIR/alpha" ]
+}
+
+@test "uninstall: retains dirty index-installed package directory" {
+  create_installed_package "alpha"
+  touch "$SHIV_PACKAGES_DIR/alpha/uncommitted.txt"
+
+  run run_uninstall "alpha" "true"
+  [ "$status" -eq 0 ]
+  [ -d "$SHIV_PACKAGES_DIR/alpha" ]
+  echo "$output" | grep -q "local changes"
+  echo "$output" | grep -q "\-\-force"
+}
+
+@test "uninstall: --force removes dirty index-installed package directory" {
+  create_installed_package "alpha"
+  touch "$SHIV_PACKAGES_DIR/alpha/uncommitted.txt"
+
+  run_uninstall "alpha" "false" "true"
+  [ ! -d "$SHIV_PACKAGES_DIR/alpha" ]
+}
+
+@test "uninstall: retains local-path package directory" {
+  local repo_dir="$TEST_HOME/my-project"
+  mkdir -p "$repo_dir"
+  git -C "$repo_dir" init -q -b main
+  git -C "$repo_dir" config user.email "test@test.com"
+  git -C "$repo_dir" config user.name "Test"
+  touch "$repo_dir/README.md"
+  git -C "$repo_dir" add .
+  git -C "$repo_dir" commit -q -m "init"
+  shiv_register "myapp" "$repo_dir"
+  shiv_create_shim "myapp" "$repo_dir"
+
+  run run_uninstall "myapp" "true"
+  [ "$status" -eq 0 ]
+  [ -d "$repo_dir" ]
+  echo "$output" | grep -q "Package directory retained"
+}
+
+# ============================================================================
 # Confirmation prompt
 # ============================================================================
 

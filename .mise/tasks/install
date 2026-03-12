@@ -33,7 +33,7 @@ else
     available=$(shiv_list_sources | awk '!seen[$1]++ {printf "%s|%s\n", $1, $2}' | sort -t'|' -k1,1)
 
     if [ -n "$available" ]; then
-      echo "$available" | gum table -s "$SEP" -c "PACKAGE,REPO" -p --border normal
+      echo "$available" | gum table -s "$SEP" -c "PACKAGE,REPO" -p --border normal >&2
     fi
     exit 1
   fi
