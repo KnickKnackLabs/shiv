@@ -1,0 +1,187 @@
+#!/usr/bin/env bats
+# shiv uninstall test suite
+
+REPO_DIR="$BATS_TEST_DIRNAME/.."
+UNINSTALL_TASK="$REPO_DIR/.mise/tasks/uninstall"
+
+setup() {
+  source "$REPO_DIR/lib/shim.sh"
+
+  export TEST_HOME="$BATS_TMPDIR/shiv-test-$$"
+  mkdir -p "$TEST_HOME"
+
+  export SHIV_BIN_DIR="$TEST_HOME/.local/bin"
+  export SHIV_DATA_DIR="$TEST_HOME/.local/share/shiv"
+  export SHIV_PACKAGES_DIR="$SHIV_DATA_DIR/packages"
+  export SHIV_CONFIG_DIR="$TEST_HOME/.config/shiv"
+  export SHIV_CACHE_DIR="$TEST_HOME/.cache/shiv"
+  export SHIV_REGISTRY="$SHIV_CONFIG_DIR/registry.json"
+
+  mkdir -p "$SHIV_BIN_DIR"
+  shiv_init_registry
+
+  export SHIV_SKIP_CACHE=1
+}
+
+teardown() {
+  rm -rf "$TEST_HOME"
+}
+
+# Helper: create a minimal installed package (repo, shim, registry, cache)
+create_installed_package() {
+  local name="$1"
+  local repo_dir="$SHIV_PACKAGES_DIR/$name"
+
+  mkdir -p "$repo_dir"
+  git -C "$repo_dir" init -q -b main
+  git -C "$repo_dir" config user.email "test@test.com"
+  git -C "$repo_dir" config user.name "Test"
+  touch "$repo_dir/README.md"
+  git -C "$repo_dir" add .
+  git -C "$repo_dir" commit -q -m "init"
+
+  shift
+  shiv_register "$name" "$repo_dir" "$@"
+  shiv_create_shim "$name" "$repo_dir"
+
+  # Create a cache file
+  mkdir -p "$SHIV_CACHE_DIR/completions"
+  printf 'hello\tSay hello\n' > "$SHIV_CACHE_DIR/completions/$name.cache"
+
+  # Create alias symlinks if provided
+  local aliases=("$@")
+  if [ ${#aliases[@]} -gt 0 ]; then
+    shiv_create_alias_symlinks "$name" "${aliases[@]}"
+  fi
+}
+
+# Helper: run the uninstall task
+run_uninstall() {
+  local name="$1"
+  local force="${2:-false}"
+  usage_name="$name" usage_force="$force" bash "$UNINSTALL_TASK" 2>&1
+}
+
+# Helper: create a mock gum that auto-confirms or auto-denies
+mock_gum_confirm() {
+  local exit_code="$1"  # 0 = confirm, 1 = deny
+  mkdir -p "$TEST_HOME/mock-bin"
+  cat > "$TEST_HOME/mock-bin/gum" <<MOCK
+#!/usr/bin/env bash
+if [ "\$1" = "confirm" ]; then
+  exit $exit_code
+fi
+# Pass through to real gum for non-confirm commands (e.g., gum log)
+exec "$(command -v gum)" "\$@"
+MOCK
+  chmod +x "$TEST_HOME/mock-bin/gum"
+  export PATH="$TEST_HOME/mock-bin:$PATH"
+}
+
+# ============================================================================
+# Self-protection
+# ============================================================================
+
+@test "uninstall: refuses to uninstall shiv itself" {
+  run run_uninstall "shiv"
+  [ "$status" -ne 0 ]
+  echo "$output" | grep -qi "can't uninstall shiv"
+}
+
+# ============================================================================
+# Force uninstall (no confirmation prompt)
+# ============================================================================
+
+@test "uninstall: --force removes shim" {
+  create_installed_package "alpha"
+  [ -f "$SHIV_BIN_DIR/alpha" ]
+
+  run run_uninstall "alpha" "true"
+  [ "$status" -eq 0 ]
+  [ ! -f "$SHIV_BIN_DIR/alpha" ]
+}
+
+@test "uninstall: --force deregisters from registry" {
+  create_installed_package "alpha"
+  [ -n "$(shiv_registry_path "alpha")" ]
+
+  run_uninstall "alpha" "true"
+  [ -z "$(shiv_registry_path "alpha")" ]
+}
+
+@test "uninstall: --force removes cache" {
+  create_installed_package "alpha"
+  [ -f "$SHIV_CACHE_DIR/completions/alpha.cache" ]
+
+  run_uninstall "alpha" "true"
+  [ ! -f "$SHIV_CACHE_DIR/completions/alpha.cache" ]
+}
+
+@test "uninstall: --force removes alias symlinks" {
+  create_installed_package "alpha" "a" "al"
+  [ -L "$SHIV_BIN_DIR/a" ]
+  [ -L "$SHIV_BIN_DIR/al" ]
+
+  run_uninstall "alpha" "true"
+  [ ! -L "$SHIV_BIN_DIR/a" ]
+  [ ! -L "$SHIV_BIN_DIR/al" ]
+}
+
+@test "uninstall: handles missing shim gracefully" {
+  create_installed_package "alpha"
+  rm "$SHIV_BIN_DIR/alpha"
+
+  run run_uninstall "alpha" "true"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -qi "no shim found"
+}
+
+@test "uninstall: logs removed aliases" {
+  create_installed_package "alpha" "a"
+
+  run run_uninstall "alpha" "true"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -qi "removed aliases"
+}
+
+@test "uninstall: no alias log when package has no aliases" {
+  create_installed_package "alpha"
+
+  run run_uninstall "alpha" "true"
+  [ "$status" -eq 0 ]
+  ! echo "$output" | grep -qi "removed aliases"
+}
+
+# ============================================================================
+# Confirmation prompt
+# ============================================================================
+
+@test "uninstall: confirmed prompt proceeds with uninstall" {
+  create_installed_package "alpha"
+  mock_gum_confirm 0
+
+  run run_uninstall "alpha"
+  [ "$status" -eq 0 ]
+  [ ! -f "$SHIV_BIN_DIR/alpha" ]
+}
+
+@test "uninstall: denied prompt cancels cleanly" {
+  create_installed_package "alpha"
+  mock_gum_confirm 1
+
+  run run_uninstall "alpha"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q "Cancelled"
+  # Shim should still exist
+  [ -f "$SHIV_BIN_DIR/alpha" ]
+}
+
+@test "uninstall: --force skips confirmation entirely" {
+  create_installed_package "alpha"
+  # Mock gum to deny — should be irrelevant with --force
+  mock_gum_confirm 1
+
+  run run_uninstall "alpha" "true"
+  [ "$status" -eq 0 ]
+  [ ! -f "$SHIV_BIN_DIR/alpha" ]
+}
