@@ -1,24 +1,35 @@
 #!/usr/bin/env bash
 #MISE description="Remove a tool's shim and deregister it"
 #USAGE arg "<name>" help="Package name to remove"
-#USAGE flag "--force" help="Skip confirmation prompt"
+#USAGE flag "-y --yes" help="Skip confirmation prompt"
+#USAGE flag "--force" help="Override safety checks (e.g., uninstalling shiv)"
 set -eo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "$REPO_DIR/lib/shim.sh"
 
 NAME="${usage_name}"
+YES="${usage_yes:-false}"
 FORCE="${usage_force:-false}"
 
-if [ "$NAME" = "shiv" ]; then
-  gum log -l error "Can't uninstall shiv — that would be pulling your own plug"
-  exit 1
+# --force implies --yes
+if [ "$FORCE" = "true" ]; then
+  YES="true"
 fi
 
 shiv_init_registry
 
-# Confirm before proceeding (unless --force)
-if [ "$FORCE" != "true" ]; then
+# Self-uninstall safety check
+if [ "$NAME" = "shiv" ] && [ "$FORCE" != "true" ]; then
+  OTHER_COUNT=$(jq '[keys[] | select(. != "shiv")] | length' "$SHIV_REGISTRY")
+  if [ "$OTHER_COUNT" -gt 0 ]; then
+    gum log -l error "$OTHER_COUNT package(s) still installed — use --force to uninstall shiv anyway"
+    exit 1
+  fi
+fi
+
+# Confirm before proceeding (unless -y or --force)
+if [ "$YES" != "true" ]; then
   gum confirm "Uninstall $NAME?" || { echo "Cancelled."; exit 0; }
 fi
 

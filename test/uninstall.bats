@@ -58,8 +58,9 @@ create_installed_package() {
 # Helper: run the uninstall task
 run_uninstall() {
   local name="$1"
-  local force="${2:-false}"
-  usage_name="$name" usage_force="$force" bash "$UNINSTALL_TASK" 2>&1
+  local yes="${2:-false}"
+  local force="${3:-false}"
+  usage_name="$name" usage_yes="$yes" usage_force="$force" bash "$UNINSTALL_TASK" 2>&1
 }
 
 # Helper: create a mock gum that auto-confirms or auto-denies
@@ -82,17 +83,41 @@ MOCK
 # Self-protection
 # ============================================================================
 
-@test "uninstall: refuses to uninstall shiv itself" {
+@test "uninstall: refuses shiv when other packages installed" {
+  create_installed_package "shiv"
+  create_installed_package "alpha"
+
   run run_uninstall "shiv"
   [ "$status" -ne 0 ]
-  echo "$output" | grep -qi "can't uninstall shiv"
+  echo "$output" | grep -q "1 package(s) still installed"
+  echo "$output" | grep -q "\-\-force"
+}
+
+@test "uninstall: allows shiv when no other packages" {
+  create_installed_package "shiv"
+  mock_gum_confirm 0
+
+  run run_uninstall "shiv"
+  [ "$status" -eq 0 ]
+  [ ! -f "$SHIV_BIN_DIR/shiv" ]
+}
+
+@test "uninstall: --force overrides shiv self-protection" {
+  create_installed_package "shiv"
+  create_installed_package "alpha"
+
+  run run_uninstall "shiv" "false" "true"
+  [ "$status" -eq 0 ]
+  [ ! -f "$SHIV_BIN_DIR/shiv" ]
+  # alpha should still be installed
+  [ -f "$SHIV_BIN_DIR/alpha" ]
 }
 
 # ============================================================================
-# Force uninstall (no confirmation prompt)
+# -y flag (skip confirmation)
 # ============================================================================
 
-@test "uninstall: --force removes shim" {
+@test "uninstall: -y removes shim" {
   create_installed_package "alpha"
   [ -f "$SHIV_BIN_DIR/alpha" ]
 
@@ -101,7 +126,7 @@ MOCK
   [ ! -f "$SHIV_BIN_DIR/alpha" ]
 }
 
-@test "uninstall: --force deregisters from registry" {
+@test "uninstall: -y deregisters from registry" {
   create_installed_package "alpha"
   [ -n "$(shiv_registry_path "alpha")" ]
 
@@ -109,7 +134,7 @@ MOCK
   [ -z "$(shiv_registry_path "alpha")" ]
 }
 
-@test "uninstall: --force removes cache" {
+@test "uninstall: -y removes cache" {
   create_installed_package "alpha"
   [ -f "$SHIV_CACHE_DIR/completions/alpha.cache" ]
 
@@ -117,7 +142,7 @@ MOCK
   [ ! -f "$SHIV_CACHE_DIR/completions/alpha.cache" ]
 }
 
-@test "uninstall: --force removes alias symlinks" {
+@test "uninstall: -y removes alias symlinks" {
   create_installed_package "alpha" "a" "al"
   [ -L "$SHIV_BIN_DIR/a" ]
   [ -L "$SHIV_BIN_DIR/al" ]
@@ -176,12 +201,22 @@ MOCK
   [ -f "$SHIV_BIN_DIR/alpha" ]
 }
 
-@test "uninstall: --force skips confirmation entirely" {
+@test "uninstall: -y skips confirmation entirely" {
+  create_installed_package "alpha"
+  # Mock gum to deny — should be irrelevant with -y
+  mock_gum_confirm 1
+
+  run run_uninstall "alpha" "true"
+  [ "$status" -eq 0 ]
+  [ ! -f "$SHIV_BIN_DIR/alpha" ]
+}
+
+@test "uninstall: --force implies -y" {
   create_installed_package "alpha"
   # Mock gum to deny — should be irrelevant with --force
   mock_gum_confirm 1
 
-  run run_uninstall "alpha" "true"
+  run run_uninstall "alpha" "false" "true"
   [ "$status" -eq 0 ]
   [ ! -f "$SHIV_BIN_DIR/alpha" ]
 }
