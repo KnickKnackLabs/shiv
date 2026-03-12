@@ -215,6 +215,76 @@ teardown() {
 }
 
 # ============================================================================
+# Ref support
+# ============================================================================
+
+@test "ref: register with ref stores ref" {
+  SHIV_REF="v1.0.0" shiv_register "foo" "/path/to/foo"
+  jq -e '.foo.ref == "v1.0.0"' "$SHIV_REGISTRY"
+}
+
+@test "ref: register without ref omits ref key" {
+  shiv_register "foo" "/path/to/foo"
+  run jq -e '.foo | has("ref")' "$SHIV_REGISTRY"
+  [ "$status" -ne 0 ]
+}
+
+@test "ref: shiv_registry_ref returns ref" {
+  SHIV_REF="main" shiv_register "foo" "/path/to/foo"
+  [ "$(shiv_registry_ref "foo")" = "main" ]
+}
+
+@test "ref: shiv_registry_ref returns empty for unpinned" {
+  shiv_register "foo" "/path/to/foo"
+  [ -z "$(shiv_registry_ref "foo")" ]
+}
+
+@test "ref: register with ref and aliases stores both" {
+  SHIV_REF="v2.0" shiv_register "foo" "/path/to/foo" "f"
+  jq -e '.foo.ref == "v2.0"' "$SHIV_REGISTRY"
+  jq -e '.foo.aliases == ["f"]' "$SHIV_REGISTRY"
+}
+
+@test "ref: re-register without ref clears previous ref" {
+  SHIV_REF="v1.0" shiv_register "foo" "/path/to/foo"
+  shiv_register "foo" "/path/to/foo"
+  run jq -e '.foo | has("ref")' "$SHIV_REGISTRY"
+  [ "$status" -ne 0 ]
+}
+
+# ============================================================================
+# Ref type detection
+# ============================================================================
+
+@test "ref-type: detects short commit SHA" {
+  result=$(shiv_detect_ref_type "any/repo" "abc1234")
+  [ "$result" = "commit" ]
+}
+
+@test "ref-type: detects full 40-char commit SHA" {
+  result=$(shiv_detect_ref_type "any/repo" "abcdef1234abcdef1234abcdef1234abcdef1234")
+  [ "$result" = "commit" ]
+}
+
+@test "ref-type: rejects uppercase hex as commit SHA" {
+  # Uppercase is not a valid SHA — falls through to ls-remote
+  run shiv_detect_ref_type "nonexistent/repo" "ABC1234"
+  [ "$status" -ne 0 ]
+}
+
+@test "ref-type: rejects too-short hex as commit SHA" {
+  # 6 chars is below the 7-char minimum
+  run shiv_detect_ref_type "nonexistent/repo" "abc123"
+  [ "$status" -ne 0 ]
+}
+
+@test "ref-type: non-hex string is not a commit SHA" {
+  # "foobar7" contains non-hex chars, should not match SHA pattern
+  run shiv_detect_ref_type "nonexistent/repo" "foobar7"
+  [ "$status" -ne 0 ]
+}
+
+# ============================================================================
 # Schema validation
 # ============================================================================
 
@@ -238,5 +308,21 @@ teardown() {
     skip "jsonschema not found"
   fi
   shiv_register "foo" "/path/to/foo"
+  jsonschema validate "$REPO_DIR/registry.schema.json" "$SHIV_REGISTRY"
+}
+
+@test "schema: registry with ref is valid" {
+  if ! command -v jsonschema &>/dev/null; then
+    skip "jsonschema not found"
+  fi
+  SHIV_REF="v1.0.0" shiv_register "foo" "/path/to/foo"
+  jsonschema validate "$REPO_DIR/registry.schema.json" "$SHIV_REGISTRY"
+}
+
+@test "schema: registry with ref and aliases is valid" {
+  if ! command -v jsonschema &>/dev/null; then
+    skip "jsonschema not found"
+  fi
+  SHIV_REF="v1.0.0" shiv_register "foo" "/path/to/foo" "f"
   jsonschema validate "$REPO_DIR/registry.schema.json" "$SHIV_REGISTRY"
 }
