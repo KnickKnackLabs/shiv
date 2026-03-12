@@ -55,6 +55,40 @@ create_installed_package() {
   fi
 }
 
+# Helper: create an installed package with a bare remote (so @{upstream} works)
+create_installed_package_with_remote() {
+  local name="$1"
+  local repo_dir="$SHIV_PACKAGES_DIR/$name"
+  local bare_dir="$TEST_HOME/remotes/$name.git"
+
+  # Create bare remote
+  mkdir -p "$bare_dir"
+  git -C "$bare_dir" init -q --bare
+
+  # Clone it (sets up tracking automatically)
+  git clone -q "$bare_dir" "$repo_dir"
+  git -C "$repo_dir" config user.email "test@test.com"
+  git -C "$repo_dir" config user.name "Test"
+  touch "$repo_dir/README.md"
+  git -C "$repo_dir" add .
+  git -C "$repo_dir" commit -q -m "init"
+  git -C "$repo_dir" push -q
+
+  shift
+  shiv_register "$name" "$repo_dir" "$@"
+  shiv_create_shim "$name" "$repo_dir"
+
+  # Create a cache file
+  mkdir -p "$SHIV_CACHE_DIR/completions"
+  printf 'hello\tSay hello\n' > "$SHIV_CACHE_DIR/completions/$name.cache"
+
+  # Create alias symlinks if provided
+  local aliases=("$@")
+  if [ ${#aliases[@]} -gt 0 ]; then
+    shiv_create_alias_symlinks "$name" "${aliases[@]}"
+  fi
+}
+
 # Helper: run the uninstall task
 run_uninstall() {
   local name="$1"
@@ -231,7 +265,7 @@ MOCK
 # ============================================================================
 
 @test "uninstall: removes clean index-installed package directory" {
-  create_installed_package "alpha"
+  create_installed_package_with_remote "alpha"
   [ -d "$SHIV_PACKAGES_DIR/alpha" ]
 
   run_uninstall "alpha" "true"
@@ -255,6 +289,43 @@ MOCK
 
   run_uninstall "alpha" "false" "true"
   [ ! -d "$SHIV_PACKAGES_DIR/alpha" ]
+}
+
+@test "uninstall: retains index-installed package with unpushed commits" {
+  create_installed_package_with_remote "alpha"
+  # Make a local commit that isn't pushed
+  touch "$SHIV_PACKAGES_DIR/alpha/local-only.txt"
+  git -C "$SHIV_PACKAGES_DIR/alpha" add .
+  git -C "$SHIV_PACKAGES_DIR/alpha" commit -q -m "local only"
+
+  run run_uninstall "alpha" "true"
+  [ "$status" -eq 0 ]
+  [ -d "$SHIV_PACKAGES_DIR/alpha" ]
+  echo "$output" | grep -q "local changes"
+}
+
+@test "uninstall: --force removes index-installed package with unpushed commits" {
+  create_installed_package_with_remote "alpha"
+  touch "$SHIV_PACKAGES_DIR/alpha/local-only.txt"
+  git -C "$SHIV_PACKAGES_DIR/alpha" add .
+  git -C "$SHIV_PACKAGES_DIR/alpha" commit -q -m "local only"
+
+  run_uninstall "alpha" "false" "true"
+  [ ! -d "$SHIV_PACKAGES_DIR/alpha" ]
+}
+
+@test "uninstall: retains index-installed package on local-only branch (no upstream)" {
+  create_installed_package_with_remote "alpha"
+  # Create a local branch with no upstream
+  git -C "$SHIV_PACKAGES_DIR/alpha" checkout -q -b feature/local-work
+  touch "$SHIV_PACKAGES_DIR/alpha/experiment.txt"
+  git -C "$SHIV_PACKAGES_DIR/alpha" add .
+  git -C "$SHIV_PACKAGES_DIR/alpha" commit -q -m "local experiment"
+
+  run run_uninstall "alpha" "true"
+  [ "$status" -eq 0 ]
+  [ -d "$SHIV_PACKAGES_DIR/alpha" ]
+  echo "$output" | grep -q "local changes"
 }
 
 @test "uninstall: retains local-path package directory" {

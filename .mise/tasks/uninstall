@@ -93,9 +93,6 @@ fi
 shiv_unregister "$NAME"
 shiv_cache_remove "$NAME"
 
-echo ""
-echo "  ✓ Uninstalled $NAME"
-
 # Clean up package directory
 if [ -d "$TOOL_PATH" ]; then
   case "$TOOL_PATH" in
@@ -105,11 +102,17 @@ if [ -d "$TOOL_PATH" ]; then
       if [ -n "$(git -C "$TOOL_PATH" status --porcelain 2>/dev/null | head -1)" ]; then
         repo_dirty=true
       fi
-      if [ -n "$(git -C "$TOOL_PATH" log @{upstream}..HEAD --oneline 2>/dev/null | head -1)" ]; then
+      if git -C "$TOOL_PATH" rev-parse --verify @{upstream} &>/dev/null; then
+        if [ -n "$(git -C "$TOOL_PATH" log @{upstream}..HEAD --oneline 2>/dev/null | head -1)" ]; then
+          repo_dirty=true
+        fi
+      else
+        # No upstream tracking — can't verify commits are pushed, be conservative
         repo_dirty=true
       fi
 
       if [ "$repo_dirty" = "true" ] && [ "$FORCE" != "true" ]; then
+        echo ""
         gum style --faint "  Package directory has local changes, retained at $TOOL_PATH"
         gum style --faint "  Use --force to remove it."
       else
@@ -118,7 +121,11 @@ if [ -d "$TOOL_PATH" ]; then
       ;;
     *)
       # Local-path install — never remove, it's the user's repo
+      echo ""
       gum style --faint "  Package directory retained at $TOOL_PATH"
       ;;
   esac
 fi
+
+echo ""
+echo "  ✓ Uninstalled $NAME"
