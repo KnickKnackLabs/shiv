@@ -72,7 +72,7 @@ mock_gum_confirm() {
 if [ "\$1" = "confirm" ]; then
   exit $exit_code
 fi
-# Pass through to real gum for non-confirm commands (e.g., gum log)
+# Pass through to real gum for non-confirm commands (e.g., gum table, gum style)
 exec "$(command -v gum)" "\$@"
 MOCK
   chmod +x "$TEST_HOME/mock-bin/gum"
@@ -91,6 +91,20 @@ MOCK
   [ "$status" -ne 0 ]
   echo "$output" | grep -q "1 package(s) still installed"
   echo "$output" | grep -q "\-\-force"
+  # Should show the other package in a table
+  echo "$output" | grep -q "alpha"
+}
+
+@test "uninstall: self-protection table shows all other packages" {
+  create_installed_package "shiv"
+  create_installed_package "alpha"
+  create_installed_package "bravo"
+
+  run run_uninstall "shiv"
+  [ "$status" -ne 0 ]
+  echo "$output" | grep -q "2 package(s) still installed"
+  echo "$output" | grep -q "alpha"
+  echo "$output" | grep -q "bravo"
 }
 
 @test "uninstall: allows shiv when no other packages" {
@@ -111,6 +125,48 @@ MOCK
   [ ! -f "$SHIV_BIN_DIR/shiv" ]
   # alpha should still be installed
   [ -f "$SHIV_BIN_DIR/alpha" ]
+}
+
+# ============================================================================
+# Summary card
+# ============================================================================
+
+@test "uninstall: summary card shows package details" {
+  create_installed_package "alpha"
+
+  run run_uninstall "alpha" "true"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q "PACKAGE"
+  echo "$output" | grep -q "alpha"
+  echo "$output" | grep -q "PATH"
+  echo "$output" | grep -q "SHIM"
+}
+
+@test "uninstall: summary card shows aliases" {
+  create_installed_package "alpha" "a" "al"
+
+  run run_uninstall "alpha" "true"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q "a al"
+}
+
+@test "uninstall: summary card shows not found for missing shim" {
+  create_installed_package "alpha"
+  rm "$SHIV_BIN_DIR/alpha"
+
+  run run_uninstall "alpha" "true"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q "not found"
+}
+
+@test "uninstall: summary card shows not found for missing path" {
+  # Register a package pointing to a nonexistent path
+  shiv_register "gone" "/tmp/nonexistent-repo-$$"
+  shiv_create_shim "gone" "/tmp/nonexistent-repo-$$"
+
+  run run_uninstall "gone" "true"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q "not found"
 }
 
 # ============================================================================
@@ -152,29 +208,12 @@ MOCK
   [ ! -L "$SHIV_BIN_DIR/al" ]
 }
 
-@test "uninstall: handles missing shim gracefully" {
-  create_installed_package "alpha"
-  rm "$SHIV_BIN_DIR/alpha"
-
-  run run_uninstall "alpha" "true"
-  [ "$status" -eq 0 ]
-  echo "$output" | grep -qi "no shim found"
-}
-
-@test "uninstall: logs removed aliases" {
-  create_installed_package "alpha" "a"
-
-  run run_uninstall "alpha" "true"
-  [ "$status" -eq 0 ]
-  echo "$output" | grep -qi "removed aliases"
-}
-
-@test "uninstall: no alias log when package has no aliases" {
+@test "uninstall: shows success message" {
   create_installed_package "alpha"
 
   run run_uninstall "alpha" "true"
   [ "$status" -eq 0 ]
-  ! echo "$output" | grep -qi "removed aliases"
+  echo "$output" | grep -q "✓ Uninstalled alpha"
 }
 
 # ============================================================================
@@ -188,6 +227,7 @@ MOCK
   run run_uninstall "alpha"
   [ "$status" -eq 0 ]
   [ ! -f "$SHIV_BIN_DIR/alpha" ]
+  echo "$output" | grep -q "✓ Uninstalled alpha"
 }
 
 @test "uninstall: denied prompt cancels cleanly" {

@@ -11,6 +11,7 @@ source "$REPO_DIR/lib/shim.sh"
 NAME="${usage_name}"
 YES="${usage_yes:-false}"
 FORCE="${usage_force:-false}"
+SEP='|'
 
 # --force implies --yes
 if [ "$FORCE" = "true" ]; then
@@ -23,34 +24,68 @@ shiv_init_registry
 if [ "$NAME" = "shiv" ] && [ "$FORCE" != "true" ]; then
   OTHER_COUNT=$(jq '[keys[] | select(. != "shiv")] | length' "$SHIV_REGISTRY")
   if [ "$OTHER_COUNT" -gt 0 ]; then
-    gum log -l error "$OTHER_COUNT package(s) still installed — use --force to uninstall shiv anyway"
+    echo ""
+    echo "  Can't uninstall shiv — $OTHER_COUNT package(s) still installed:"
+    echo ""
+
+    while IFS=$'\t' read -r pkg_name pkg_path; do
+      if [ "$pkg_name" != "shiv" ]; then
+        printf '%s\n' "${pkg_name}${SEP}${pkg_path}"
+      fi
+    done < <(shiv_registry_entries) | gum table -s "$SEP" -c "PACKAGE,PATH" -p --border normal
+
+    echo ""
+    gum style --faint "  Use --force to uninstall shiv anyway."
     exit 1
   fi
 fi
 
-# Confirm before proceeding (unless -y or --force)
-if [ "$YES" != "true" ]; then
-  gum confirm "Uninstall $NAME?" || { echo "Cancelled."; exit 0; }
+# Gather metadata for summary card
+TOOL_PATH=$(shiv_registry_path "$NAME")
+mapfile -t ALIASES < <(shiv_registry_aliases "$NAME")
+
+# Annotate PATH and SHIM with "(not found)" if missing
+path_display="${TOOL_PATH:--}"
+if [ -n "$TOOL_PATH" ] && [ ! -d "$TOOL_PATH" ]; then
+  path_display="$TOOL_PATH (not found)"
 fi
 
-# Resolve aliases before removing anything
-mapfile -t ALIASES < <(shiv_registry_aliases "$NAME")
+shim_display="$SHIV_BIN_DIR/$NAME"
+if [ ! -f "$SHIV_BIN_DIR/$NAME" ]; then
+  shim_display="$SHIV_BIN_DIR/$NAME (not found)"
+fi
+
+alias_display="${ALIASES[*]}"
+alias_display="${alias_display:--}"
+
+# Show summary card
+echo ""
+{
+  echo "PACKAGE${SEP}${NAME}"
+  echo "PATH${SEP}${path_display}"
+  echo "SHIM${SEP}${shim_display}"
+  echo "ALIASES${SEP}${alias_display}"
+} | gum table -s "$SEP" -c "KEY,VALUE" -p --border normal
+
+# Confirm before proceeding (unless -y or --force)
+if [ "$YES" != "true" ]; then
+  echo ""
+  gum confirm "Proceed?" || { echo "Cancelled."; exit 0; }
+fi
 
 # Remove alias symlinks
 if [ ${#ALIASES[@]} -gt 0 ]; then
   shiv_remove_alias_symlinks "$NAME" "${ALIASES[@]}"
-  gum log -l info "Removed aliases: ${ALIASES[*]}"
 fi
 
 # Remove shim
 if [ -f "$SHIV_BIN_DIR/$NAME" ]; then
   rm "$SHIV_BIN_DIR/$NAME"
-  gum log -l info "Removed shim: $SHIV_BIN_DIR/$NAME"
-else
-  gum log -l warn "No shim found for $NAME"
 fi
 
 # Deregister
 shiv_unregister "$NAME"
 shiv_cache_remove "$NAME"
-gum log -l info "Unregistered: $NAME"
+
+echo ""
+echo "  ✓ Uninstalled $NAME"
