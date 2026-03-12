@@ -29,7 +29,7 @@ fi
 echo "Checking $COUNT tool(s)..."
 echo ""
 
-shiv_registry_entries | while IFS=$'\t' read -r name repo; do
+shiv_registry_entries | while IFS=$'\t' read -r name repo _ref; do
   issues=""
 
   # Check repo exists
