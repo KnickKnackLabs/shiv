@@ -58,3 +58,34 @@ shiv_list_sources() {
     jq -r 'to_entries[] | "\(.key) \(.value)"' "$repo_sources"
   fi
 }
+
+# Detect whether a ref is a tag, branch, or commit SHA
+# Usage: shiv_detect_ref_type <github-repo-slug> <ref>
+# Prints "tag", "branch", or "commit" to stdout; returns 1 if unknown
+shiv_detect_ref_type() {
+  local gh_repo="$1" ref="$2"
+
+  # Commit SHA pattern: 7-40 lowercase hex characters
+  if [[ "$ref" =~ ^[0-9a-f]{7,40}$ ]]; then
+    echo "commit"
+    return 0
+  fi
+
+  # Check remote refs via ls-remote
+  local ls_output
+  ls_output=$(git ls-remote "https://github.com/${gh_repo}.git" "$ref" 2>/dev/null)
+
+  if [ -z "$ls_output" ]; then
+    echo "Error: ref '$ref' not found in $gh_repo" >&2
+    return 1
+  fi
+
+  if echo "$ls_output" | grep -q "refs/tags/"; then
+    echo "tag"
+  elif echo "$ls_output" | grep -q "refs/heads/"; then
+    echo "branch"
+  else
+    echo "Error: ref '$ref' has unexpected type in $gh_repo" >&2
+    return 1
+  fi
+}

@@ -23,6 +23,10 @@
           },
           "uniqueItems": true,
           "description": "Optional command aliases. Each alias gets a symlink in the bin directory."
+        },
+        "ref": {
+          "type": "string",
+          "description": "Git ref this package is pinned to (tag, branch, or commit SHA)."
         }
       },
       "required": ["path"],

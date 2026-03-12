@@ -47,16 +47,20 @@ shiv_register() {
     fi
   done
 
-  local tmp
-  if [ ${#aliases[@]} -eq 0 ]; then
-    tmp=$(jq --arg n "$name" --arg p "$repo_dir" \
-      '.[$n] = {"path": $p}' "$SHIV_REGISTRY")
-  else
-    local aliases_json
+  # Build aliases JSON (null if none)
+  local aliases_json="null"
+  if [ ${#aliases[@]} -gt 0 ]; then
     aliases_json=$(printf '%s\n' "${aliases[@]}" | jq -R . | jq -s .)
-    tmp=$(jq --arg n "$name" --arg p "$repo_dir" --argjson a "$aliases_json" \
-      '.[$n] = {"path": $p, "aliases": $a}' "$SHIV_REGISTRY")
   fi
+
+  local tmp
+  tmp=$(jq --arg n "$name" --arg p "$repo_dir" \
+    --arg r "${SHIV_REF:-}" \
+    --argjson a "$aliases_json" \
+    '.[$n] = ({"path": $p}
+      + (if $r != "" then {"ref": $r} else {} end)
+      + (if $a then {"aliases": $a} else {} end))' \
+    "$SHIV_REGISTRY")
   echo "$tmp" > "$SHIV_REGISTRY"
 }
 
@@ -79,6 +83,12 @@ shiv_registry_path() {
 shiv_registry_aliases() {
   local name="$1"
   jq -r --arg n "$name" '.[$n].aliases // [] | .[]' "$SHIV_REGISTRY"
+}
+
+# Get the pinned ref for a package (empty if unpinned)
+shiv_registry_ref() {
+  local name="$1"
+  jq -r --arg n "$name" '.[$n].ref // empty' "$SHIV_REGISTRY"
 }
 
 # Set aliases for an existing package
@@ -113,9 +123,9 @@ shiv_registry_set_aliases() {
   echo "$tmp" > "$SHIV_REGISTRY"
 }
 
-# Iterate all entries as "name<TAB>path" lines
+# Iterate all entries as "name<TAB>path<TAB>ref" lines
 shiv_registry_entries() {
-  jq -r 'to_entries[] | "\(.key)\t\(.value.path)"' "$SHIV_REGISTRY"
+  jq -r 'to_entries[] | "\(.key)\t\(.value.path)\t\(.value.ref // "")"' "$SHIV_REGISTRY"
 }
 
 # Resolve a name that might be a package name or an alias

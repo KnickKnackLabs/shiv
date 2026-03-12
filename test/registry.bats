@@ -82,15 +82,25 @@ teardown() {
   [ -z "$(shiv_registry_aliases "foo")" ]
 }
 
-@test "registry: shiv_registry_entries outputs name-tab-path" {
+@test "registry: shiv_registry_entries outputs name-tab-path-tab-ref" {
   shiv_register "alpha" "/path/a"
-  shiv_register "beta" "/path/b"
+  SHIV_REF="v1.0" shiv_register "beta" "/path/b"
   local count=0
-  shiv_registry_entries | while IFS=$'\t' read -r name path; do
+  shiv_registry_entries | while IFS=$'\t' read -r name path ref; do
     [ -n "$name" ] && [ -n "$path" ]
     count=$((count + 1))
   done
   [ "$(shiv_registry_entries | wc -l | tr -d ' ')" -eq 2 ]
+
+  # Verify ref field is populated for pinned package
+  local beta_ref
+  beta_ref=$(shiv_registry_entries | grep '^beta' | cut -f3)
+  [ "$beta_ref" = "v1.0" ]
+
+  # Verify ref field is empty for unpinned package
+  local alpha_ref
+  alpha_ref=$(shiv_registry_entries | grep '^alpha' | cut -f3)
+  [ -z "$alpha_ref" ]
 }
 
 @test "registry: shiv_registry_set_aliases updates aliases" {
