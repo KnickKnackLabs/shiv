@@ -90,4 +90,8 @@ case "$SORT_FIELD" in
     ;;
 esac
 
+echo ""
+gum style --bold "  Installed packages"
+gum style --faint "  $COUNT package(s) managed by shiv"
+echo ""
 printf '%s' "$sorted" | gum table -s "$SEP" -c "PACKAGE,ALIASES,BRANCH,VERSION,UPDATED" -p --border normal
