@@ -1,3 +1,4 @@
 [tools]
 bats = "1.13.0"
+gum = "0.17.0"
 jsonschema = "14.14.2"
