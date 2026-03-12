@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 #MISE description="Show all managed tools"
+#USAGE flag "--sort <field>" help="Sort by: name (default), updated"
+#USAGE flag "--desc" help="Sort descending (default for updated)"
+#USAGE flag "--asc" help="Sort ascending (default for name)"
 set -eo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -14,11 +17,77 @@ if [ "$COUNT" -eq 0 ]; then
   exit 0
 fi
 
-echo "Managed tools ($COUNT):"
-echo ""
-printf "  %-15s %-10s %s\n" "PACKAGE" "ALIASES" "REPO"
-printf "  %-15s %-10s %s\n" "-------" "-------" "----"
-shiv_registry_entries | while IFS=$'\t' read -r name repo; do
+SORT_FIELD="${usage_sort:-name}"
+SORT_DESC="${usage_desc:-false}"
+SORT_ASC="${usage_asc:-false}"
+
+# Validate sort field
+case "$SORT_FIELD" in
+  name|updated) ;;
+  *) echo "Error: unknown sort field '$SORT_FIELD' (expected: name, updated)" >&2; exit 1 ;;
+esac
+
+# Determine sort direction: explicit flags win, otherwise default per field
+if [ "$SORT_ASC" = "true" ]; then
+  SORT_REVERSE=false
+elif [ "$SORT_DESC" = "true" ]; then
+  SORT_REVERSE=true
+elif [ "$SORT_FIELD" = "updated" ]; then
+  SORT_REVERSE=true  # most recent first
+else
+  SORT_REVERSE=false  # alphabetical A-Z
+fi
+
+# Field separator — pipe, since no field values contain it
+# (comma breaks on git's relative dates like "2 years, 3 months ago")
+SEP='|'
+
+# Build table rows: PACKAGE | ALIASES | BRANCH | VERSION | UPDATED
+# Each row is prefixed with unix timestamp (tab-separated) for sort-by-updated
+rows=()
+while IFS=$'\t' read -r name repo; do
   aliases=$(shiv_registry_aliases "$name" | paste -sd, -)
-  printf "  %-15s %-10s %s\n" "$name" "${aliases:--}" "$repo"
-done
+
+  # Git metadata (gracefully handle missing/non-git repos)
+  if [ -d "$repo/.git" ]; then
+    branch=$(git -C "$repo" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "-")
+    short=$(git -C "$repo" rev-parse --short HEAD 2>/dev/null || echo "-")
+    tag=$(git -C "$repo" describe --tags --exact-match HEAD 2>/dev/null || echo "")
+    version="${tag:-$short}"
+    # Mark dirty working trees
+    if [ -n "$(git -C "$repo" status --porcelain 2>/dev/null | head -1)" ]; then
+      version="${version}*"
+    fi
+    updated=$(git -C "$repo" log -1 --format='%cd' --date=relative 2>/dev/null || echo "-")
+    timestamp=$(git -C "$repo" log -1 --format='%ct' 2>/dev/null || echo "0")
+  else
+    branch="-"
+    version="-"
+    updated="-"
+    timestamp="0"
+  fi
+
+  rows+=("${timestamp}	${name}${SEP}${aliases:--}${SEP}${branch}${SEP}${version}${SEP}${updated}")
+done < <(shiv_registry_entries)
+
+# Sort rows
+case "$SORT_FIELD" in
+  name)
+    # Strip timestamp prefix, then sort alphabetically by package name
+    if [ "$SORT_REVERSE" = "true" ]; then
+      sorted=$(printf '%s\n' "${rows[@]}" | cut -f2- | sort -t"$SEP" -k1,1r)
+    else
+      sorted=$(printf '%s\n' "${rows[@]}" | cut -f2- | sort -t"$SEP" -k1,1)
+    fi
+    ;;
+  updated)
+    # Sort by unix timestamp prefix (numeric), then strip it
+    if [ "$SORT_REVERSE" = "true" ]; then
+      sorted=$(printf '%s\n' "${rows[@]}" | sort -t$'\t' -k1,1 -nr | cut -f2-)
+    else
+      sorted=$(printf '%s\n' "${rows[@]}" | sort -t$'\t' -k1,1 -n | cut -f2-)
+    fi
+    ;;
+esac
+
+printf '%s' "$sorted" | gum table -s "$SEP" -c "PACKAGE,ALIASES,BRANCH,VERSION,UPDATED" -p --border normal

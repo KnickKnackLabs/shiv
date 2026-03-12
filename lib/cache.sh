@@ -7,6 +7,8 @@ SHIV_CACHE_DIR="${SHIV_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/shiv}"
 # Writes atomically — only replaces cache if new content is non-empty,
 # so a failed mise invocation doesn't leave an empty cache file.
 shiv_cache_tasks() {
+  [ "${SHIV_SKIP_CACHE:-}" = "1" ] && return 0
+
   local name="$1" repo_dir="$2"
   local cache="$SHIV_CACHE_DIR/completions/$name.cache"
   local tmp="$cache.tmp"

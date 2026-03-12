@@ -10,6 +10,7 @@ source "$REPO_DIR/lib/shim.sh"
 
 NAME="${usage_name}"
 LOCAL_PATH="${usage_path:-}"
+SEP='|'
 
 # Collect aliases from --as flags (var=#true gives space-separated string)
 ALIASES=()
@@ -22,36 +23,38 @@ if [ -n "$LOCAL_PATH" ]; then
   TOOL_PATH="$(cd "$LOCAL_PATH" && pwd)"
 else
   # Package install — look up in sources and clone
-  GH_REPO=$(shiv_lookup "$NAME")
+  GH_REPO=$(shiv_lookup "$NAME" || true)
   if [ -z "$GH_REPO" ]; then
-    echo "Error: '$NAME' not found in package index" >&2
-    echo ""
-    echo "Available packages:"
-    shiv_list_sources | while read -r pkg repo; do
-      echo "  $pkg → $repo"
-    done
+    echo "" >&2
+    echo "  ✗ '$NAME' not found in package index" >&2
+    echo "" >&2
+
+    # Show available packages as a table (deduplicated)
+    available=$(shiv_list_sources | awk '!seen[$1]++ {printf "%s|%s\n", $1, $2}' | sort -t'|' -k1,1)
+
+    if [ -n "$available" ]; then
+      echo "$available" | gum table -s "$SEP" -c "PACKAGE,REPO" -p --border normal >&2
+    fi
     exit 1
   fi
 
   TOOL_PATH="$SHIV_PACKAGES_DIR/$NAME"
 
   if [ -d "$TOOL_PATH" ]; then
-    echo "Already cloned: $TOOL_PATH"
-    echo "Pulling latest..."
-    git -C "$TOOL_PATH" pull --ff-only 2>&1 | sed 's/^/  /'
+    echo "  Already cloned: $TOOL_PATH"
+    gum spin --title "  Pulling latest..." --show-error -- git -C "$TOOL_PATH" pull --ff-only
   else
-    echo "Cloning $GH_REPO..."
     mkdir -p "$SHIV_PACKAGES_DIR"
-    gh repo clone "$GH_REPO" "$TOOL_PATH" 2>&1 | sed 's/^/  /'
+    gum spin --title "  Cloning $GH_REPO..." --show-error -- gh repo clone "$GH_REPO" "$TOOL_PATH"
   fi
 
   # Set up dependencies
-  echo "Setting up..."
-  (cd "$TOOL_PATH" && mise trust -q 2>/dev/null; mise install -q 2>/dev/null) || true
+  printf -v escaped_path '%q' "$TOOL_PATH"
+  gum spin --title "  Setting up dependencies..." -- bash -c "cd $escaped_path && mise trust -q 2>/dev/null; mise install -q 2>/dev/null || true"
 fi
 
 if [ ! -f "$TOOL_PATH/mise.toml" ]; then
-  echo "Warning: no mise.toml found at $TOOL_PATH"
+  echo "  ⚠ No mise.toml found at $TOOL_PATH"
 fi
 
 shiv_create_shim "$NAME" "$TOOL_PATH"
@@ -63,12 +66,83 @@ if [ ${#ALIASES[@]} -gt 0 ]; then
   shiv_create_alias_symlinks "$NAME" "${ALIASES[@]}"
 fi
 
+# --- Summary card ---
 echo ""
-echo "✓ Installed: $NAME → $TOOL_PATH"
-echo "  Shim: $SHIV_BIN_DIR/$NAME"
-if [ ${#ALIASES[@]} -gt 0 ]; then
-  echo "  Aliases: ${ALIASES[*]}"
+echo "  ✓ Installed $NAME"
+echo ""
+
+# Gather git metadata
+branch="-"
+version="-"
+if [ -d "$TOOL_PATH/.git" ]; then
+  branch=$(git -C "$TOOL_PATH" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "-")
+  short=$(git -C "$TOOL_PATH" rev-parse --short HEAD 2>/dev/null || echo "-")
+  tag=$(git -C "$TOOL_PATH" describe --tags --exact-match HEAD 2>/dev/null || echo "")
+  version="${tag:-$short}"
+  if [ -n "$(git -C "$TOOL_PATH" status --porcelain 2>/dev/null | head -1)" ]; then
+    version="${version}*"
+  fi
 fi
+
+# Gather available tasks from cache
+tasks="-"
+task_count=0
+tasks_truncated=false
+MAX_TASK_GROUPS=8
+cache_file="$SHIV_CACHE_DIR/completions/$NAME.cache"
+if [ -f "$cache_file" ]; then
+  # Count total tasks (excluding internal ones)
+  task_count=$(awk -F'\t' '$1 != "" && $1 != "mise-config" && $1 != "zshrc"' "$cache_file" | wc -l | tr -d ' ')
+
+  if [ "$task_count" -gt 0 ]; then
+    # Group by top-level prefix (before ':'), count each group
+    # Standalone tasks (no ':') are listed individually
+    all_groups=$(awk -F'\t' '$1 != "" && $1 != "mise-config" && $1 != "zshrc" {print $1}' "$cache_file" \
+      | awk -F: '{
+          if (NF > 1) groups[$1]++
+          else standalone[$1]=1
+        }
+        END {
+          for (g in groups) printf "%s (%d)\n", g, groups[g]
+          for (s in standalone) printf "%s\n", s
+        }' \
+      | sort)
+
+    total_groups=$(echo "$all_groups" | wc -l | tr -d ' ')
+
+    if [ "$total_groups" -gt "$MAX_TASK_GROUPS" ]; then
+      tasks=$(echo "$all_groups" | head -n "$MAX_TASK_GROUPS" | paste -sd, - | sed 's/,/, /g')
+      tasks="${tasks}, ..."
+      tasks_truncated=true
+    else
+      tasks=$(echo "$all_groups" | paste -sd, - | sed 's/,/, /g')
+    fi
+  fi
+fi
+
+# Format aliases
+alias_display="${ALIASES[*]}"
+alias_display="${alias_display:--}"
+
+# Build summary card as key-value table
+{
+  echo "PACKAGE${SEP}${NAME}"
+  echo "PATH${SEP}${TOOL_PATH}"
+  echo "BRANCH${SEP}${branch}"
+  echo "VERSION${SEP}${version}"
+  echo "SHIM${SEP}${SHIV_BIN_DIR}/${NAME}"
+  echo "ALIASES${SEP}${alias_display}"
+  if [ "$task_count" -gt 0 ]; then
+    echo "TASKS (${task_count})${SEP}${tasks}"
+  else
+    echo "TASKS${SEP}-"
+  fi
+} | gum table -s "$SEP" -c "KEY,VALUE" -p --border normal
+
+if [ "$tasks_truncated" = "true" ]; then
+  gum style --faint "  Run '$NAME tasks' to see all $task_count tasks."
+fi
+
 echo ""
 echo "Reload your shell or run:"
-echo "  eval \"\$(mise -C $REPO_DIR run -q shell)\""
+gum style --faint "  eval \"\$(mise -C $REPO_DIR run -q shell)\""
