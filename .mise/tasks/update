@@ -9,8 +9,13 @@ source "$REPO_DIR/lib/shim.sh"
 shiv_init_registry
 
 TARGET="${usage_name:-}"
+SEP='|'
 
-# Update a single package
+# Collect results for summary table
+# Each entry: PACKAGE|BRANCH|VERSION|STATUS|DETAIL
+RESULTS=()
+
+# Update a single package, appending result to RESULTS array
 update_one() {
   local name="$1"
   local repo
@@ -27,32 +32,65 @@ update_one() {
   fi
 
   if [ -z "$repo" ]; then
-    echo "Error: '$1' is not a registered package or alias" >&2
+    RESULTS+=("${name}${SEP}-${SEP}-${SEP}✗${SEP}not a registered package or alias")
+    echo "  ✗ $name — not a registered package or alias"
     return 1
   fi
 
   if [ ! -d "$repo" ]; then
-    echo "  ✗ $name — repo not found at $repo" >&2
+    RESULTS+=("${name}${SEP}-${SEP}-${SEP}✗${SEP}repo not found at $repo")
+    echo "  ✗ $name — repo not found at $repo"
     return 1
   fi
 
-  local before after output
+  local branch before after output version dirty_marker
+  branch=$(git -C "$repo" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "-")
   before=$(git -C "$repo" rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
   if output=$(git -C "$repo" pull --ff-only 2>&1); then
     after=$(git -C "$repo" rev-parse --short HEAD 2>/dev/null || echo "unknown")
+
+    # Check for dirty working tree
+    dirty_marker=""
+    if [ -n "$(git -C "$repo" status --porcelain 2>/dev/null | head -1)" ]; then
+      dirty_marker="*"
+    fi
+
+    # Use tag if available, otherwise short hash
+    local tag
+    tag=$(git -C "$repo" describe --tags --exact-match HEAD 2>/dev/null || echo "")
+    version="${tag:-$after}${dirty_marker}"
+
+    # Refresh shim only on successful pull
     shiv_create_shim "$name" "$repo"
+
     if [ "$before" = "$after" ]; then
-      echo "  ✓ $name  already up to date"
+      RESULTS+=("${name}${SEP}${branch}${SEP}${version}${SEP}✓${SEP}already up to date")
+      echo "  ✓ $name — already up to date"
     else
       local count
       count=$(git -C "$repo" rev-list --count "$before".."$after" 2>/dev/null || echo "?")
-      echo "  ✓ $name  $before..$after ($count commits)"
+      RESULTS+=("${name}${SEP}${branch}${SEP}${version}${SEP}✓${SEP}${before} → ${after} (${count} commits)")
+      echo "  ✓ $name — $before → $after ($count commits)"
     fi
   else
-    shiv_create_shim "$name" "$repo"
-    echo "  ⚠ $name  pull failed, shim refreshed"
-    echo "    $output" | head -3 | sed 's/^/    /'
+    # Pull failed — figure out why, do NOT refresh shim
+    local reason
+    # Extract the meaningful error line (fatal/error), fall back to last non-empty line
+    reason=$(echo "$output" | grep -m1 -E '^(fatal|error):' || echo "$output" | grep -v '^$' | tail -1)
+
+    # Check for dirty working tree
+    dirty_marker=""
+    if [ -n "$(git -C "$repo" status --porcelain 2>/dev/null | head -1)" ]; then
+      dirty_marker="*"
+    fi
+
+    local tag
+    tag=$(git -C "$repo" describe --tags --exact-match HEAD 2>/dev/null || echo "")
+    version="${tag:-$before}${dirty_marker}"
+
+    RESULTS+=("${name}${SEP}${branch}${SEP}${version}${SEP}⚠${SEP}${reason}")
+    echo "  ⚠ $name — $reason"
   fi
 
   shiv_cache_tasks "$name" "$repo"
@@ -66,7 +104,12 @@ update_one() {
 
 if [ -n "$TARGET" ]; then
   echo "Updating $TARGET..."
-  update_one "$TARGET" || exit 1
+  update_one "$TARGET" || true
+
+  # Single package — no summary table needed
+  if [ "${#RESULTS[@]}" -eq 1 ]; then
+    exit 0
+  fi
 else
   COUNT=$(jq 'length' "$SHIV_REGISTRY")
   if [ "$COUNT" -eq 0 ]; then
@@ -74,9 +117,12 @@ else
     exit 0
   fi
   echo "Updating $COUNT tool(s)..."
-  shiv_registry_entries | while IFS=$'\t' read -r name repo; do
+  echo ""
+  while IFS=$'\t' read -r name repo; do
     update_one "$name" || true
-  done
+  done < <(shiv_registry_entries)
 fi
 
-echo "Done."
+# Summary table (multi-package updates only)
+echo ""
+printf '%s\n' "${RESULTS[@]}" | gum table -s "$SEP" -c "PACKAGE,BRANCH,VERSION,STATUS,DETAIL" -p --border normal

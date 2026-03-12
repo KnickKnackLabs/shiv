@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+#MISE description="Run install tests (BATS)"
+set -e
+
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+bats "$REPO_DIR/test/install.bats"

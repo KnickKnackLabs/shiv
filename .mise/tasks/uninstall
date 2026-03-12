@@ -1,19 +1,26 @@
 #!/usr/bin/env bash
 #MISE description="Remove a tool's shim and deregister it"
 #USAGE arg "<name>" help="Package name to remove"
+#USAGE flag "--force" help="Skip confirmation prompt"
 set -eo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "$REPO_DIR/lib/shim.sh"
 
 NAME="${usage_name}"
+FORCE="${usage_force:-false}"
 
 if [ "$NAME" = "shiv" ]; then
-  echo "Can't uninstall shiv — that would be pulling your own plug"
+  gum log -l error "Can't uninstall shiv — that would be pulling your own plug"
   exit 1
 fi
 
 shiv_init_registry
+
+# Confirm before proceeding (unless --force)
+if [ "$FORCE" != "true" ]; then
+  gum confirm "Uninstall $NAME?" || { echo "Cancelled."; exit 0; }
+fi
 
 # Resolve aliases before removing anything
 mapfile -t ALIASES < <(shiv_registry_aliases "$NAME")
@@ -21,18 +28,18 @@ mapfile -t ALIASES < <(shiv_registry_aliases "$NAME")
 # Remove alias symlinks
 if [ ${#ALIASES[@]} -gt 0 ]; then
   shiv_remove_alias_symlinks "$NAME" "${ALIASES[@]}"
-  echo "Removed aliases: ${ALIASES[*]}"
+  gum log -l info "Removed aliases: ${ALIASES[*]}"
 fi
 
 # Remove shim
 if [ -f "$SHIV_BIN_DIR/$NAME" ]; then
   rm "$SHIV_BIN_DIR/$NAME"
-  echo "Removed shim: $SHIV_BIN_DIR/$NAME"
+  gum log -l info "Removed shim: $SHIV_BIN_DIR/$NAME"
 else
-  echo "No shim found for $NAME"
+  gum log -l warn "No shim found for $NAME"
 fi
 
 # Deregister
 shiv_unregister "$NAME"
 shiv_cache_remove "$NAME"
-echo "Unregistered: $NAME"
+gum log -l info "Unregistered: $NAME"
