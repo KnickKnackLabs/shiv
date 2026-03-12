@@ -104,11 +104,12 @@ update_one() {
 
 if [ -n "$TARGET" ]; then
   echo "Updating $TARGET..."
-  update_one "$TARGET" || true
+  rc=0
+  update_one "$TARGET" || rc=$?
 
   # Single package — no summary table needed
   if [ "${#RESULTS[@]}" -eq 1 ]; then
-    exit 0
+    exit $rc
   fi
 else
   COUNT=$(jq 'length' "$SHIV_REGISTRY")

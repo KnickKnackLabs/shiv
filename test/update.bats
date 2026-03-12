@@ -64,6 +64,11 @@ push_remote_commit() {
   rm -rf "$tmp_dir"
 }
 
+# Helper: portable file modification time (seconds since epoch)
+file_mtime() {
+  stat -f %m "$1" 2>/dev/null || stat -c %Y "$1"
+}
+
 # Helper: run the update task
 run_update() {
   local name="${1:-}"
@@ -93,12 +98,14 @@ extract_column() {
 
 @test "update: unknown package shows error" {
   run run_update "nonexistent"
+  [ "$status" -ne 0 ]
   echo "$output" | grep -q "not a registered package or alias"
 }
 
 @test "update: missing repo directory shows error" {
   shiv_register "gone" "/tmp/nonexistent-repo-$$"
   run run_update "gone"
+  [ "$status" -ne 0 ]
   echo "$output" | grep -q "repo not found"
 }
 
@@ -166,7 +173,7 @@ extract_column() {
 
   # Record shim modification time
   local before_mtime
-  before_mtime=$(stat -f %m "$SHIV_BIN_DIR/alpha")
+  before_mtime=$(file_mtime "$SHIV_BIN_DIR/alpha")
 
   # Push a commit to remote and diverge locally
   push_remote_commit "alpha"
@@ -182,7 +189,7 @@ extract_column() {
   run run_update "alpha"
 
   local after_mtime
-  after_mtime=$(stat -f %m "$SHIV_BIN_DIR/alpha")
+  after_mtime=$(file_mtime "$SHIV_BIN_DIR/alpha")
   [ "$before_mtime" = "$after_mtime" ]
 }
 

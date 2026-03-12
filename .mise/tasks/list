@@ -44,7 +44,7 @@ SEP='|'
 
 # Build table rows: PACKAGE | ALIASES | BRANCH | VERSION | UPDATED
 # Each row is prefixed with unix timestamp (tab-separated) for sort-by-updated
-rows=""
+rows=()
 while IFS=$'\t' read -r name repo; do
   aliases=$(shiv_registry_aliases "$name" | paste -sd, -)
 
@@ -67,7 +67,7 @@ while IFS=$'\t' read -r name repo; do
     timestamp="0"
   fi
 
-  rows+="${timestamp}	${name}${SEP}${aliases:--}${SEP}${branch}${SEP}${version}${SEP}${updated}"$'\n'
+  rows+=("${timestamp}	${name}${SEP}${aliases:--}${SEP}${branch}${SEP}${version}${SEP}${updated}")
 done < <(shiv_registry_entries)
 
 # Sort rows
@@ -75,19 +75,19 @@ case "$SORT_FIELD" in
   name)
     # Strip timestamp prefix, then sort alphabetically by package name
     if [ "$SORT_REVERSE" = "true" ]; then
-      sorted=$(echo -n "$rows" | cut -f2- | sort -t"$SEP" -k1,1r)
+      sorted=$(printf '%s\n' "${rows[@]}" | cut -f2- | sort -t"$SEP" -k1,1r)
     else
-      sorted=$(echo -n "$rows" | cut -f2- | sort -t"$SEP" -k1,1)
+      sorted=$(printf '%s\n' "${rows[@]}" | cut -f2- | sort -t"$SEP" -k1,1)
     fi
     ;;
   updated)
     # Sort by unix timestamp prefix (numeric), then strip it
     if [ "$SORT_REVERSE" = "true" ]; then
-      sorted=$(echo -n "$rows" | sort -t$'\t' -k1,1 -nr | cut -f2-)
+      sorted=$(printf '%s\n' "${rows[@]}" | sort -t$'\t' -k1,1 -nr | cut -f2-)
     else
-      sorted=$(echo -n "$rows" | sort -t$'\t' -k1,1 -n | cut -f2-)
+      sorted=$(printf '%s\n' "${rows[@]}" | sort -t$'\t' -k1,1 -n | cut -f2-)
     fi
     ;;
 esac
 
-echo -n "$sorted" | gum table -s "$SEP" -c "PACKAGE,ALIASES,BRANCH,VERSION,UPDATED" -p --border normal
+printf '%s' "$sorted" | gum table -s "$SEP" -c "PACKAGE,ALIASES,BRANCH,VERSION,UPDATED" -p --border normal

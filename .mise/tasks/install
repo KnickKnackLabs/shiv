@@ -25,9 +25,9 @@ else
   # Package install — look up in sources and clone
   GH_REPO=$(shiv_lookup "$NAME" || true)
   if [ -z "$GH_REPO" ]; then
-    echo ""
-    echo "  ✗ '$NAME' not found in package index"
-    echo ""
+    echo "" >&2
+    echo "  ✗ '$NAME' not found in package index" >&2
+    echo "" >&2
 
     # Show available packages as a table (deduplicated)
     available=$(shiv_list_sources | awk '!seen[$1]++ {printf "%s|%s\n", $1, $2}' | sort -t'|' -k1,1)
@@ -49,7 +49,8 @@ else
   fi
 
   # Set up dependencies
-  gum spin --title "  Setting up dependencies..." -- bash -c "cd '$TOOL_PATH' && mise trust -q 2>/dev/null; mise install -q 2>/dev/null || true"
+  printf -v escaped_path '%q' "$TOOL_PATH"
+  gum spin --title "  Setting up dependencies..." -- bash -c "cd $escaped_path && mise trust -q 2>/dev/null; mise install -q 2>/dev/null || true"
 fi
 
 if [ ! -f "$TOOL_PATH/mise.toml" ]; then

@@ -59,7 +59,7 @@ run_install() {
   local name="$1"
   local path="${2:-}"
   local as="${3:-}"
-  usage_name="$name" usage_path="$path" usage_as="$as" bash "$INSTALL_TASK"
+  usage_name="$name" usage_path="$path" usage_as="$as" bash "$INSTALL_TASK" 2>&1
 }
 
 # ============================================================================
