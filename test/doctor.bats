@@ -227,6 +227,57 @@ run_doctor() {
   echo "$output" | grep -q "shim missing"
 }
 
+# ============================================================================
+# Orphaned shims
+# ============================================================================
+
+@test "doctor: detects orphaned shim" {
+  # Create a shiv-managed shim with no registry entry
+  cat > "$SHIV_BIN_DIR/ghost" <<'SCRIPT'
+#!/usr/bin/env bash
+# managed by shiv
+REPO="/tmp/gone"
+SCRIPT
+  chmod +x "$SHIV_BIN_DIR/ghost"
+
+  run run_doctor
+  [ "$status" -ne 0 ]
+  echo "$output" | grep -q "ORPHANED SHIMS"
+  echo "$output" | grep -q "ghost"
+}
+
+@test "doctor: ignores non-shiv scripts in bin dir" {
+  create_installed_package "alpha"
+  # Drop a random script in bin dir — not managed by shiv
+  echo '#!/bin/bash' > "$SHIV_BIN_DIR/random-tool"
+  chmod +x "$SHIV_BIN_DIR/random-tool"
+
+  run run_doctor
+  [ "$status" -eq 0 ]
+  # Should not appear in output
+  ! echo "$output" | grep -q "random-tool"
+}
+
+@test "doctor: orphaned shim alongside healthy packages" {
+  create_installed_package "alpha"
+  cat > "$SHIV_BIN_DIR/ghost" <<'SCRIPT'
+#!/usr/bin/env bash
+# managed by shiv
+REPO="/tmp/gone"
+SCRIPT
+  chmod +x "$SHIV_BIN_DIR/ghost"
+
+  run run_doctor
+  [ "$status" -ne 0 ]
+  echo "$output" | grep "alpha" | grep -q "✓"
+  echo "$output" | grep -q "ORPHANED SHIMS"
+  echo "$output" | grep -q "ghost"
+}
+
+# ============================================================================
+# Mixed states
+# ============================================================================
+
 @test "doctor: healthy and broken packages together" {
   create_installed_package "alpha"
   create_installed_package "bravo"

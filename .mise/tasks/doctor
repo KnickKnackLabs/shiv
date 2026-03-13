@@ -40,82 +40,112 @@ echo ""
   echo "Bin dir${SEP}${bin_status}"
 } | gum table -s "$SEP" -c "CHECK,STATUS" -p --border normal
 
+# ── Per-package checks ──────────────────────────────────────────
+
 if [ "$COUNT" -eq 0 ]; then
   echo ""
   echo "  No tools registered."
-  exit 0
 fi
 
-# ── Per-package checks ──────────────────────────────────────────
-
-echo ""
-gum style --bold "  PACKAGES"
-echo ""
-
-rows=()
-issue_names=()
-issue_details=()
-
-while IFS=$'\t' read -r name repo; do
-  issues=""
-  issue_count=0
-
-  # Check repo exists
-  if [ ! -d "$repo" ]; then
-    issues+="    ✗ repo not found at $repo"$'\n'
-    issue_count=$((issue_count + 1))
-  fi
-
-  # Check shim exists and is managed by shiv
-  if [ ! -f "$SHIV_BIN_DIR/$name" ]; then
-    issues+="    ✗ shim missing at $SHIV_BIN_DIR/$name"$'\n'
-    issue_count=$((issue_count + 1))
-  elif ! grep -q "# managed by shiv" "$SHIV_BIN_DIR/$name" 2>/dev/null; then
-    issues+="    ✗ shim exists but not managed by shiv"$'\n'
-    issue_count=$((issue_count + 1))
-  fi
-
-  # Check shim points to right repo
-  if [ -f "$SHIV_BIN_DIR/$name" ]; then
-    shim_repo=$(grep '^REPO=' "$SHIV_BIN_DIR/$name" 2>/dev/null | cut -d'"' -f2 || true)
-    if [ -n "$shim_repo" ] && [ "$shim_repo" != "$repo" ]; then
-      issues+="    ✗ shim points to $shim_repo but registry says $repo"$'\n'
-      issue_count=$((issue_count + 1))
-    fi
-  fi
-
-  # Check alias symlinks
-  mapfile -t aliases < <(shiv_registry_aliases "$name")
-  for alias in "${aliases[@]}"; do
-    if [ ! -L "$SHIV_BIN_DIR/$alias" ]; then
-      issues+="    ✗ alias symlink missing: $SHIV_BIN_DIR/$alias"$'\n'
-      issue_count=$((issue_count + 1))
-    elif [ "$(readlink "$SHIV_BIN_DIR/$alias")" != "$name" ]; then
-      issues+="    ✗ alias symlink $alias points to wrong target"$'\n'
-      issue_count=$((issue_count + 1))
-    fi
-  done
-
-  if [ "$issue_count" -gt 0 ]; then
-    rows+=("${name}${SEP}✗ (${issue_count})")
-    issue_names+=("$name")
-    issue_details+=("$issues")
-    HAS_ISSUES=true
-  else
-    rows+=("${name}${SEP}✓")
-  fi
-done < <(shiv_registry_entries)
-
-# Package table
-printf '%s\n' "${rows[@]}" | gum table -s "$SEP" -c "PACKAGE,STATUS" -p --border normal
-
-# Issue details
-if [ ${#issue_names[@]} -gt 0 ]; then
+if [ "$COUNT" -gt 0 ]; then
   echo ""
-  for i in "${!issue_names[@]}"; do
-    gum style --bold "  ${issue_names[$i]}:"
-    printf '%s' "${issue_details[$i]}"
+  gum style --bold "  PACKAGES"
+  echo ""
+
+  rows=()
+  issue_names=()
+  issue_details=()
+
+  while IFS=$'\t' read -r name repo; do
+    issues=""
+    issue_count=0
+
+    # Check repo exists
+    if [ ! -d "$repo" ]; then
+      issues+="    ✗ repo not found at $repo"$'\n'
+      issue_count=$((issue_count + 1))
+    fi
+
+    # Check shim exists and is managed by shiv
+    if [ ! -f "$SHIV_BIN_DIR/$name" ]; then
+      issues+="    ✗ shim missing at $SHIV_BIN_DIR/$name"$'\n'
+      issue_count=$((issue_count + 1))
+    elif ! grep -q "# managed by shiv" "$SHIV_BIN_DIR/$name" 2>/dev/null; then
+      issues+="    ✗ shim exists but not managed by shiv"$'\n'
+      issue_count=$((issue_count + 1))
+    fi
+
+    # Check shim points to right repo
+    if [ -f "$SHIV_BIN_DIR/$name" ]; then
+      shim_repo=$(grep '^REPO=' "$SHIV_BIN_DIR/$name" 2>/dev/null | cut -d'"' -f2 || true)
+      if [ -n "$shim_repo" ] && [ "$shim_repo" != "$repo" ]; then
+        issues+="    ✗ shim points to $shim_repo but registry says $repo"$'\n'
+        issue_count=$((issue_count + 1))
+      fi
+    fi
+
+    # Check alias symlinks
+    mapfile -t aliases < <(shiv_registry_aliases "$name")
+    for alias in "${aliases[@]}"; do
+      if [ ! -L "$SHIV_BIN_DIR/$alias" ]; then
+        issues+="    ✗ alias symlink missing: $SHIV_BIN_DIR/$alias"$'\n'
+        issue_count=$((issue_count + 1))
+      elif [ "$(readlink "$SHIV_BIN_DIR/$alias")" != "$name" ]; then
+        issues+="    ✗ alias symlink $alias points to wrong target"$'\n'
+        issue_count=$((issue_count + 1))
+      fi
+    done
+
+    if [ "$issue_count" -gt 0 ]; then
+      rows+=("${name}${SEP}✗ (${issue_count})")
+      issue_names+=("$name")
+      issue_details+=("$issues")
+      HAS_ISSUES=true
+    else
+      rows+=("${name}${SEP}✓")
+    fi
+  done < <(shiv_registry_entries)
+
+  # Package table
+  printf '%s\n' "${rows[@]}" | gum table -s "$SEP" -c "PACKAGE,STATUS" -p --border normal
+
+  # Issue details
+  if [ ${#issue_names[@]} -gt 0 ]; then
+    echo ""
+    for i in "${!issue_names[@]}"; do
+      gum style --bold "  ${issue_names[$i]}:"
+      printf '%s' "${issue_details[$i]}"
+    done
+  fi
+fi
+
+# ── Orphaned shims ────────────────────────────────────────────
+
+orphaned=()
+if [ -d "$SHIV_BIN_DIR" ]; then
+  for shim in "$SHIV_BIN_DIR"/*; do
+    [ -f "$shim" ] || continue
+    grep -q "# managed by shiv" "$shim" 2>/dev/null || continue
+    shim_name=$(basename "$shim")
+    # Skip if registered
+    if jq -e --arg n "$shim_name" 'has($n)' "$SHIV_REGISTRY" &>/dev/null; then
+      continue
+    fi
+    orphaned+=("$shim_name")
   done
+fi
+
+if [ ${#orphaned[@]} -gt 0 ]; then
+  echo ""
+  gum style --bold "  ORPHANED SHIMS"
+  echo ""
+  for name in "${orphaned[@]}"; do
+    echo "    ✗ $SHIV_BIN_DIR/$name"
+  done
+  echo ""
+  gum style --faint "  These shims reference shiv but have no registry entry."
+  gum style --faint "  Remove with: rm \$shim_path"
+  HAS_ISSUES=true
 fi
 
 if [ "$HAS_ISSUES" = "true" ]; then
