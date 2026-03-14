@@ -2,7 +2,7 @@
 # shiv doctor test suite
 
 REPO_DIR="$BATS_TEST_DIRNAME/.."
-DOCTOR_TASK="$REPO_DIR/.mise/tasks/doctor"
+load helpers
 
 setup() {
   source "$REPO_DIR/lib/shim.sh"
@@ -19,6 +19,7 @@ setup() {
 
   mkdir -p "$SHIV_BIN_DIR"
   shiv_init_registry
+  setup_shiv_on_path
 }
 
 teardown() {
@@ -49,9 +50,9 @@ create_installed_package() {
   fi
 }
 
-# Helper: run the doctor task
+# Helper: run shiv doctor through the mock shim
 run_doctor() {
-  bash "$DOCTOR_TASK" 2>&1
+  shiv doctor 2>&1
 }
 
 # ============================================================================

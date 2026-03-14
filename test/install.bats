@@ -2,7 +2,7 @@
 # shiv install test suite
 
 REPO_DIR="$BATS_TEST_DIRNAME/.."
-INSTALL_TASK="$REPO_DIR/.mise/tasks/install"
+load helpers
 
 setup() {
   source "$REPO_DIR/lib/shim.sh"
@@ -19,6 +19,7 @@ setup() {
 
   mkdir -p "$SHIV_BIN_DIR"
   shiv_init_registry
+  setup_shiv_on_path
 
   # Skip mise tasks --json in tests (hangs without trusted repo)
   export SHIV_SKIP_CACHE=1
@@ -54,12 +55,19 @@ create_local_repo() {
 }
 
 
-# Helper: run the install task with usage_ env vars
+# Helper: run shiv install through the mock shim
 run_install() {
   local name="$1"
   local path="${2:-}"
-  local as="${3:-}"
-  usage_name="$name" usage_path="$path" usage_as="$as" bash "$INSTALL_TASK" 2>&1
+  local as_str="${3:-}"
+  local cmd=(shiv install "$name")
+  [ -n "$path" ] && cmd+=("$path")
+  if [ -n "$as_str" ]; then
+    for a in $as_str; do
+      cmd+=(--as "$a")
+    done
+  fi
+  "${cmd[@]}" 2>&1
 }
 
 # ============================================================================

@@ -2,7 +2,7 @@
 # shiv update test suite
 
 REPO_DIR="$BATS_TEST_DIRNAME/.."
-UPDATE_TASK="$REPO_DIR/.mise/tasks/update"
+load helpers
 
 setup() {
   source "$REPO_DIR/lib/shim.sh"
@@ -19,6 +19,7 @@ setup() {
 
   mkdir -p "$SHIV_BIN_DIR"
   shiv_init_registry
+  setup_shiv_on_path
 }
 
 teardown() {
@@ -69,10 +70,12 @@ file_mtime() {
   stat -f %m "$1" 2>/dev/null || stat -c %Y "$1"
 }
 
-# Helper: run the update task
+# Helper: run shiv update through the mock shim
 run_update() {
   local name="${1:-}"
-  usage_name="$name" bash "$UPDATE_TASK"
+  local cmd=(shiv update)
+  [ -n "$name" ] && cmd+=("$name")
+  "${cmd[@]}"
 }
 
 # Helper: extract package names from gum table output
