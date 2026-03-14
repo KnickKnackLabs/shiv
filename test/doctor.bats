@@ -258,6 +258,14 @@ SCRIPT
   ! echo "$output" | grep -q "random-tool"
 }
 
+@test "doctor: alias symlinks not flagged as orphaned" {
+  create_installed_package "alpha" "a"
+
+  run run_doctor
+  [ "$status" -eq 0 ]
+  ! echo "$output" | grep -q "ORPHANED"
+}
+
 @test "doctor: orphaned shim alongside healthy packages" {
   create_installed_package "alpha"
   cat > "$SHIV_BIN_DIR/ghost" <<'SCRIPT'

@@ -45,9 +45,7 @@ echo ""
 if [ "$COUNT" -eq 0 ]; then
   echo ""
   echo "  No tools registered."
-fi
-
-if [ "$COUNT" -gt 0 ]; then
+else
   echo ""
   gum style --bold "  PACKAGES"
   echo ""
@@ -125,6 +123,7 @@ orphaned=()
 if [ -d "$SHIV_BIN_DIR" ]; then
   for shim in "$SHIV_BIN_DIR"/*; do
     [ -f "$shim" ] || continue
+    [ -L "$shim" ] && continue
     grep -q "# managed by shiv" "$shim" 2>/dev/null || continue
     shim_name=$(basename "$shim")
     # Skip if registered
