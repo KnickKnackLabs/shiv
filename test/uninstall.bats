@@ -102,6 +102,8 @@ run_uninstall() {
 }
 
 # Helper: create a mock gum that auto-confirms or auto-denies
+# Uses GUM env var injection — the uninstall task calls "${GUM:-gum}" for confirm,
+# so setting GUM to the mock script bypasses mise's PATH without fighting it.
 mock_gum_confirm() {
   local exit_code="$1"  # 0 = confirm, 1 = deny
   mkdir -p "$TEST_HOME/mock-bin"
@@ -114,7 +116,7 @@ fi
 exec "$(command -v gum)" "\$@"
 MOCK
   chmod +x "$TEST_HOME/mock-bin/gum"
-  export PATH="$TEST_HOME/mock-bin:$PATH"
+  export GUM="$TEST_HOME/mock-bin/gum"
 }
 
 # ============================================================================
