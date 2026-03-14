@@ -202,6 +202,11 @@ mise run test`}</CodeBlock>
       <Section title="License">
         <Paragraph>MIT</Paragraph>
       </Section>
+
+      <Paragraph>
+        {"This README was created using "}
+        <Link href="https://github.com/KnickKnackLabs/readme">readme</Link>.
+      </Paragraph>
     </Center>
   </>
 );

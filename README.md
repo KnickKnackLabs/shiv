@@ -129,4 +129,6 @@ Tests use [BATS](https://github.com/bats-core/bats-core) — 131 tests across 7 
 
 MIT
 
+This README was created using [readme](https://github.com/KnickKnackLabs/readme).
+
 </div>
