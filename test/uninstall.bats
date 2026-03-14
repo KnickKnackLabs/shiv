@@ -2,7 +2,7 @@
 # shiv uninstall test suite
 
 REPO_DIR="$BATS_TEST_DIRNAME/.."
-UNINSTALL_TASK="$REPO_DIR/.mise/tasks/uninstall"
+load helpers
 
 setup() {
   source "$REPO_DIR/lib/shim.sh"
@@ -19,6 +19,7 @@ setup() {
 
   mkdir -p "$SHIV_BIN_DIR"
   shiv_init_registry
+  setup_shiv_on_path
 
   export SHIV_SKIP_CACHE=1
 }
@@ -89,15 +90,20 @@ create_installed_package_with_remote() {
   fi
 }
 
-# Helper: run the uninstall task
+# Helper: run shiv uninstall through the mock shim
 run_uninstall() {
   local name="$1"
   local yes="${2:-false}"
   local force="${3:-false}"
-  usage_name="$name" usage_yes="$yes" usage_force="$force" bash "$UNINSTALL_TASK" 2>&1
+  local cmd=(shiv uninstall "$name")
+  [ "$yes" = "true" ] && cmd+=(-y)
+  [ "$force" = "true" ] && cmd+=(--force)
+  "${cmd[@]}" 2>&1
 }
 
 # Helper: create a mock gum that auto-confirms or auto-denies
+# Uses GUM env var injection — the uninstall task calls "${GUM:-gum}" for confirm,
+# so setting GUM to the mock script bypasses mise's PATH without fighting it.
 mock_gum_confirm() {
   local exit_code="$1"  # 0 = confirm, 1 = deny
   mkdir -p "$TEST_HOME/mock-bin"
@@ -110,7 +116,7 @@ fi
 exec "$(command -v gum)" "\$@"
 MOCK
   chmod +x "$TEST_HOME/mock-bin/gum"
-  export PATH="$TEST_HOME/mock-bin:$PATH"
+  export GUM="$TEST_HOME/mock-bin/gum"
 }
 
 # ============================================================================

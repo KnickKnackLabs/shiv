@@ -2,7 +2,7 @@
 # shiv list test suite
 
 REPO_DIR="$BATS_TEST_DIRNAME/.."
-LIST_TASK="$REPO_DIR/.mise/tasks/list"
+load helpers
 
 setup() {
   source "$REPO_DIR/lib/shim.sh"
@@ -18,6 +18,7 @@ setup() {
   export SHIV_REGISTRY="$SHIV_CONFIG_DIR/registry.json"
 
   shiv_init_registry
+  setup_shiv_on_path
 }
 
 teardown() {
@@ -42,20 +43,19 @@ create_test_repo() {
     git -C "$repo_dir" commit -q -m "init" --date "$date"
 }
 
-# Helper: run the list task with usage_ env vars
+# Helper: run shiv list through the mock shim
 # Usage: run_list [--sort field] [--asc|--desc]
 run_list() {
-  local sort="" asc="false" desc="false"
+  local cmd=(shiv list)
   while [ $# -gt 0 ]; do
     case "$1" in
-      --sort) sort="$2"; shift 2 ;;
-      --asc) asc="true"; shift ;;
-      --desc) desc="true"; shift ;;
+      --sort) cmd+=(--sort "$2"); shift 2 ;;
+      --asc) cmd+=(--asc); shift ;;
+      --desc) cmd+=(--desc); shift ;;
       *) shift ;;
     esac
   done
-  usage_sort="${sort}" usage_asc="${asc}" usage_desc="${desc}" \
-    bash "$LIST_TASK"
+  "${cmd[@]}"
 }
 
 # Extract package names from gum table output (skip header and border lines)

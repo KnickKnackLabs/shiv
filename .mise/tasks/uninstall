@@ -76,7 +76,7 @@ echo ""
 # Confirm before proceeding (unless -y or --force)
 if [ "$YES" != "true" ]; then
   echo ""
-  gum confirm "Proceed?" || { echo "Cancelled."; exit 0; }
+  "${GUM:-gum}" confirm "Proceed?" || { echo "Cancelled."; exit 0; }
 fi
 
 # Remove alias symlinks
