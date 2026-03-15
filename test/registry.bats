@@ -284,6 +284,20 @@ teardown() {
   [ "$status" -ne 0 ]
 }
 
+@test "ref-type: ls-remote failure with non-SHA ref shows error" {
+  # A non-SHA ref against a nonexistent repo should surface the network error
+  run shiv_detect_ref_type "nonexistent/repo" "some-branch"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"failed to query refs"* ]]
+}
+
+@test "ref-type: ls-remote failure with SHA ref falls through to commit" {
+  # A SHA pattern against a nonexistent repo should still return "commit"
+  # (ls-remote fails but the ref looks like a SHA, so we assume commit)
+  result=$(shiv_detect_ref_type "nonexistent/repo" "abc1234")
+  [ "$result" = "commit" ]
+}
+
 # ============================================================================
 # Schema validation
 # ============================================================================

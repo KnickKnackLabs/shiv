@@ -261,6 +261,41 @@ run_install() {
 }
 
 # ============================================================================
+# Ref re-install behavior
+# ============================================================================
+
+@test "install: @main on main branch does not trigger re-clone" {
+  # Test the re-clone logic directly: if requested ref matches current branch,
+  # the directory should not be removed
+  local repo_dir
+  repo_dir=$(create_local_repo "myapp")
+
+  # Simulate: tool installed at repo_dir without a ref (registry has no ref)
+  shiv_register "myapp" "$repo_dir"
+  touch "$repo_dir/.install-marker"
+
+  # Run the re-clone check logic from install
+  run bash -c "
+    source '$REPO_DIR/lib/registry.sh'
+    export SHIV_REGISTRY='$SHIV_REGISTRY'
+    EXISTING_REF=\$(shiv_registry_ref myapp)
+    CURRENT_BRANCH=\$(git -C '$repo_dir' rev-parse --abbrev-ref HEAD)
+    REF=main
+    # From install: skip re-clone when ref matches current branch
+    if [ \"\$REF\" != \"\$EXISTING_REF\" ] && [ \"\$REF\" != \"\$CURRENT_BRANCH\" ]; then
+      rm -rf '$repo_dir'
+      echo 'RECLONED'
+    else
+      echo 'SKIPPED'
+    fi
+  "
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"SKIPPED"* ]]
+  # Directory was not removed
+  [ -f "$repo_dir/.install-marker" ]
+}
+
+# ============================================================================
 # Package not found (index lookup)
 # ============================================================================
 
