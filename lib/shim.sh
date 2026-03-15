@@ -28,6 +28,13 @@ if [ ! -d "\$REPO" ]; then
   exit 1
 fi
 export CALLER_PWD="\$PWD"
+if [ "\$(basename "\$PWD")" = "$name" ] && [ "\$PWD" != "$repo_dir" ]; then
+  echo "$name: warning: you're in a directory called '$name' but running the shiv-installed copy" >&2
+  echo "$name: shiv package: $repo_dir" >&2
+  echo "$name: current dir: \$PWD" >&2
+  echo "$name: to run from this directory instead: mise run \$*" >&2
+  echo "" >&2
+fi
 case "\${1:-}" in
   --help|-h|help)
     exec mise -C "\$REPO" tasks
