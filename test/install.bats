@@ -222,6 +222,52 @@ run_install() {
 # Package not found (index lookup)
 # ============================================================================
 
+# ============================================================================
+# Shim CWD warning
+# ============================================================================
+
+@test "install: shim warns when run from same-named directory that isn't the package" {
+  local repo_dir
+  repo_dir=$(create_local_repo "myapp")
+  run_install "myapp" "$repo_dir"
+
+  # Create a different directory with the same name
+  local fake_dir="$TEST_HOME/projects/myapp"
+  mkdir -p "$fake_dir"
+
+  # Run the shim from the fake directory — should warn
+  run bash -c "cd '$fake_dir' && '$SHIV_BIN_DIR/myapp' hello 2>&1"
+  echo "$output" | grep -q "warning: you're in a directory called 'myapp' but running the shiv-installed copy"
+}
+
+@test "install: shim does not warn when run from the actual package directory" {
+  local repo_dir
+  repo_dir=$(create_local_repo "myapp")
+  run_install "myapp" "$repo_dir"
+
+  # Run from the actual shiv package dir — should NOT warn
+  local pkg_dir="$SHIV_PACKAGES_DIR/myapp"
+  # The install copies to packages dir; if not, use repo_dir
+  local run_dir="${pkg_dir}"
+  [ -d "$run_dir" ] || run_dir="$repo_dir"
+
+  run bash -c "cd '$run_dir' && '$SHIV_BIN_DIR/myapp' hello 2>&1"
+  ! echo "$output" | grep -q "warning"
+}
+
+@test "install: shim does not warn from unrelated directory" {
+  local repo_dir
+  repo_dir=$(create_local_repo "myapp")
+  run_install "myapp" "$repo_dir"
+
+  run bash -c "cd /tmp && '$SHIV_BIN_DIR/myapp' hello 2>&1"
+  ! echo "$output" | grep -q "warning"
+}
+
+# ============================================================================
+# Package not found (index lookup)
+# ============================================================================
+
 @test "install: unknown package shows error and available packages table" {
   # Set SHIV_SOURCES to a test sources file
   local sources="$TEST_HOME/sources.json"
