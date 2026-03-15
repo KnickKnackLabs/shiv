@@ -87,7 +87,8 @@ else
         gum spin --title "  Cloning $GH_REPO@$REF..." --show-error -- gh repo clone "$GH_REPO" "$TOOL_PATH" -- --branch "$REF" --depth 1 --single-branch
         ;;
       commit)
-        gum spin --title "  Cloning $GH_REPO@$REF..." --show-error -- gh repo clone "$GH_REPO" "$TOOL_PATH"
+        gum spin --title "  Cloning $GH_REPO@$REF..." --show-error -- gh repo clone "$GH_REPO" "$TOOL_PATH" -- --depth 1 --single-branch
+        git -C "$TOOL_PATH" fetch --depth 1 origin "$REF" 2>&1 | sed 's/^/  /'
         git -C "$TOOL_PATH" checkout "$REF" 2>&1 | sed 's/^/  /'
         ;;
     esac

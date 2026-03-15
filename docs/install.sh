@@ -229,10 +229,11 @@ else
         git clone --quiet --branch "$SHIV_REF" --depth 1 --single-branch \
           https://github.com/KnickKnackLabs/shiv.git "$SHIV_INSTALL_PATH"
     else
-      # Commit SHA — full clone then checkout
+      # Commit SHA — shallow clone then fetch the specific commit
       chicle_spin --title "Cloning shiv@$SHIV_REF" -- \
-        git clone --quiet \
+        git clone --quiet --depth 1 --single-branch \
           https://github.com/KnickKnackLabs/shiv.git "$SHIV_INSTALL_PATH"
+      git -C "$SHIV_INSTALL_PATH" fetch --quiet --depth 1 origin "$SHIV_REF"
       git -C "$SHIV_INSTALL_PATH" checkout --quiet "$SHIV_REF"
     fi
   else
