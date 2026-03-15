@@ -222,9 +222,19 @@ if [ -d "$SHIV_INSTALL_PATH/.git" ]; then
 else
   mkdir -p "$(dirname "$SHIV_INSTALL_PATH")"
   if [ -n "$SHIV_REF" ]; then
-    chicle_spin --title "Cloning shiv@$SHIV_REF" -- \
-      git clone --quiet --branch "$SHIV_REF" --depth 1 --single-branch \
-        https://github.com/KnickKnackLabs/shiv.git "$SHIV_INSTALL_PATH"
+    # Commit SHAs can't use --branch; detect by checking ls-remote first
+    if git ls-remote "https://github.com/KnickKnackLabs/shiv.git" "$SHIV_REF" 2>/dev/null | grep -q .; then
+      # Named ref (tag or branch) — shallow single-branch clone
+      chicle_spin --title "Cloning shiv@$SHIV_REF" -- \
+        git clone --quiet --branch "$SHIV_REF" --depth 1 --single-branch \
+          https://github.com/KnickKnackLabs/shiv.git "$SHIV_INSTALL_PATH"
+    else
+      # Commit SHA — full clone then checkout
+      chicle_spin --title "Cloning shiv@$SHIV_REF" -- \
+        git clone --quiet \
+          https://github.com/KnickKnackLabs/shiv.git "$SHIV_INSTALL_PATH"
+      git -C "$SHIV_INSTALL_PATH" checkout --quiet "$SHIV_REF"
+    fi
   else
     chicle_spin --title "Cloning shiv" -- \
       git clone --quiet --single-branch \

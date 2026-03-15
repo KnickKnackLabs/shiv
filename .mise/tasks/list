@@ -42,10 +42,10 @@ fi
 # (comma breaks on git's relative dates like "2 years, 3 months ago")
 SEP='|'
 
-# Build table rows: PACKAGE | ALIASES | BRANCH | VERSION | UPDATED
+# Build table rows: PACKAGE | ALIASES | REF | BRANCH | VERSION | UPDATED
 # Each row is prefixed with unix timestamp (tab-separated) for sort-by-updated
 rows=()
-while IFS=$'\t' read -r name repo _ref; do
+while IFS=$'\t' read -r name repo ref; do
   aliases=$(shiv_registry_aliases "$name" | paste -sd, -)
 
   # Git metadata (gracefully handle missing/non-git repos)
@@ -67,7 +67,7 @@ while IFS=$'\t' read -r name repo _ref; do
     timestamp="0"
   fi
 
-  rows+=("${timestamp}	${name}${SEP}${aliases:--}${SEP}${branch}${SEP}${version}${SEP}${updated}")
+  rows+=("${timestamp}	${name}${SEP}${aliases:--}${SEP}${ref:--}${SEP}${branch}${SEP}${version}${SEP}${updated}")
 done < <(shiv_registry_entries)
 
 # Sort rows
@@ -94,4 +94,4 @@ echo ""
 gum style --bold "  Installed packages"
 gum style --faint "  $COUNT package(s) managed by shiv"
 echo ""
-printf '%s' "$sorted" | gum table -s "$SEP" -c "PACKAGE,ALIASES,BRANCH,VERSION,UPDATED" -p --border normal
+printf '%s' "$sorted" | gum table -s "$SEP" -c "PACKAGE,ALIASES,REF,BRANCH,VERSION,UPDATED" -p --border normal

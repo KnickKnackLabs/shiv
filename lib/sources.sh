@@ -65,27 +65,29 @@ shiv_list_sources() {
 shiv_detect_ref_type() {
   local gh_repo="$1" ref="$2"
 
-  # Commit SHA pattern: 7-40 lowercase hex characters
+  # Check remote refs via ls-remote first (handles tags/branches, including
+  # hex-named ones like "deadbeef" that would otherwise match the SHA pattern)
+  local ls_output
+  ls_output=$(git ls-remote "https://github.com/${gh_repo}.git" "$ref" 2>/dev/null)
+
+  if [ -n "$ls_output" ]; then
+    if echo "$ls_output" | grep -q "refs/tags/"; then
+      echo "tag"
+    elif echo "$ls_output" | grep -q "refs/heads/"; then
+      echo "branch"
+    else
+      echo "Error: ref '$ref' has unexpected type in $gh_repo" >&2
+      return 1
+    fi
+    return 0
+  fi
+
+  # Not a named ref — check if it looks like a commit SHA (7-40 lowercase hex)
   if [[ "$ref" =~ ^[0-9a-f]{7,40}$ ]]; then
     echo "commit"
     return 0
   fi
 
-  # Check remote refs via ls-remote
-  local ls_output
-  ls_output=$(git ls-remote "https://github.com/${gh_repo}.git" "$ref" 2>/dev/null)
-
-  if [ -z "$ls_output" ]; then
-    echo "Error: ref '$ref' not found in $gh_repo" >&2
-    return 1
-  fi
-
-  if echo "$ls_output" | grep -q "refs/tags/"; then
-    echo "tag"
-  elif echo "$ls_output" | grep -q "refs/heads/"; then
-    echo "branch"
-  else
-    echo "Error: ref '$ref' has unexpected type in $gh_repo" >&2
-    return 1
-  fi
+  echo "Error: ref '$ref' not found in $gh_repo" >&2
+  return 1
 }
