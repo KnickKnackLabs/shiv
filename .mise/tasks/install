@@ -65,7 +65,11 @@ else
     if [ "$REF" != "$EXISTING_REF" ] && [ "$REF" != "$CURRENT_BRANCH" ]; then
       # Switch ref in-place (fetch + checkout) to avoid deleting a directory
       # we might be running from (e.g., shiv reinstalling itself)
-      echo "  Ref changed (${EXISTING_REF:-default} → ${REF:-default}), switching..."
+      if [ -n "$EXISTING_REF" ] && [ -z "$REF" ]; then
+        echo "  ⚠ Unpinning from $EXISTING_REF — $NAME will now track the default branch"
+      else
+        echo "  Ref changed (${EXISTING_REF:-default} → ${REF:-default}), switching..."
+      fi
       git -C "$TOOL_PATH" fetch origin 2>&1 | sed 's/^/  /'
       # Empty ref means "back to default branch"
       CHECKOUT_TARGET="${REF:-$(git -C "$TOOL_PATH" remote show origin 2>/dev/null | sed -n 's/.*HEAD branch: //p')}"
