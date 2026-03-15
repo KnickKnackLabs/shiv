@@ -57,14 +57,17 @@ else
 
   TOOL_PATH="$SHIV_PACKAGES_DIR/$NAME"
 
-  # If already cloned but ref changed, re-clone
+  # If already cloned but ref changed, switch to the new ref
   if [ -d "$TOOL_PATH" ]; then
     EXISTING_REF=$(shiv_registry_ref "$NAME")
     # Normalize: if the requested ref matches the current branch, treat as same
     CURRENT_BRANCH=$(git -C "$TOOL_PATH" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
     if [ "$REF" != "$EXISTING_REF" ] && [ "$REF" != "$CURRENT_BRANCH" ]; then
-      echo "  Ref changed (${EXISTING_REF:-default} → ${REF:-default}), re-cloning..."
-      rm -rf "$TOOL_PATH"
+      # Switch ref in-place (fetch + checkout) to avoid deleting a directory
+      # we might be running from (e.g., shiv reinstalling itself)
+      echo "  Ref changed (${EXISTING_REF:-default} → ${REF:-default}), switching..."
+      git -C "$TOOL_PATH" fetch origin 2>&1 | sed 's/^/  /'
+      git -C "$TOOL_PATH" checkout "$REF" 2>&1 | sed 's/^/  /'
     elif [ "$REF" != "$EXISTING_REF" ] && [ "$REF" = "$CURRENT_BRANCH" ]; then
       # e.g., installing tool@main when already on main — just update the registry
       :
