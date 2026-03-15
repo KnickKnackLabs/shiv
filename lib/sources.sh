@@ -67,10 +67,11 @@ shiv_detect_ref_type() {
 
   # Check remote refs via ls-remote first (handles tags/branches, including
   # hex-named ones like "deadbeef" that would otherwise match the SHA pattern)
-  local ls_output
-  ls_output=$(git ls-remote "https://github.com/${gh_repo}.git" "$ref" 2>/dev/null)
+  local ls_output ls_exit
+  ls_output=$(git ls-remote "https://github.com/${gh_repo}.git" "$ref" 2>&1)
+  ls_exit=$?
 
-  if [ -n "$ls_output" ]; then
+  if [ "$ls_exit" -eq 0 ] && [ -n "$ls_output" ]; then
     if echo "$ls_output" | grep -q "refs/tags/"; then
       echo "tag"
     elif echo "$ls_output" | grep -q "refs/heads/"; then
@@ -82,12 +83,18 @@ shiv_detect_ref_type() {
     return 0
   fi
 
-  # Not a named ref — check if it looks like a commit SHA (7-40 lowercase hex)
+  # ls-remote didn't find a named ref — check if it looks like a commit SHA
   if [[ "$ref" =~ ^[0-9a-f]{7,40}$ ]]; then
     echo "commit"
     return 0
   fi
 
-  echo "Error: ref '$ref' not found in $gh_repo" >&2
+  # Neither a named ref nor a SHA — report the error
+  if [ "$ls_exit" -ne 0 ]; then
+    echo "Error: failed to query refs for $gh_repo" >&2
+    echo "$ls_output" | sed 's/^/  /' >&2
+  else
+    echo "Error: ref '$ref' not found in $gh_repo" >&2
+  fi
   return 1
 }

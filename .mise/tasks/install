@@ -60,9 +60,14 @@ else
   # If already cloned but ref changed, re-clone
   if [ -d "$TOOL_PATH" ]; then
     EXISTING_REF=$(shiv_registry_ref "$NAME")
-    if [ "$REF" != "$EXISTING_REF" ]; then
+    # Normalize: if the requested ref matches the current branch, treat as same
+    CURRENT_BRANCH=$(git -C "$TOOL_PATH" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+    if [ "$REF" != "$EXISTING_REF" ] && [ "$REF" != "$CURRENT_BRANCH" ]; then
       echo "  Ref changed (${EXISTING_REF:-default} → ${REF:-default}), re-cloning..."
       rm -rf "$TOOL_PATH"
+    elif [ "$REF" != "$EXISTING_REF" ] && [ "$REF" = "$CURRENT_BRANCH" ]; then
+      # e.g., installing tool@main when already on main — just update the registry
+      :
     fi
   fi
 
