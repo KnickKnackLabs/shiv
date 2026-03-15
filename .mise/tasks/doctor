@@ -54,7 +54,7 @@ else
   issue_names=()
   issue_details=()
 
-  while IFS=$'\t' read -r name repo; do
+  while IFS=$'\t' read -r name repo _ref; do
     issues=""
     issue_count=0
 

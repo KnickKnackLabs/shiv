@@ -32,6 +32,7 @@ SHIV_INSTALL_PATH="${SHIV_INSTALL_PATH:-${XDG_DATA_HOME:-$HOME/.local/share}/shi
 SHIV_BIN_DIR="${SHIV_BIN_DIR:-$HOME/.local/bin}"
 SHIV_CONFIG_DIR="${SHIV_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/shiv}"
 SHIV_REGISTRIES="${SHIV_REGISTRIES:-}"
+SHIV_REF="${SHIV_REF:-}"
 
 CHICLE_URL="https://chicle.knacklabs.co/chicle.sh"
 TOTAL_STEPS=6
@@ -206,14 +207,40 @@ echo ""
 chicle_steps --current 3 --total $TOTAL_STEPS --title "Installing shiv" --style dots
 
 if [ -d "$SHIV_INSTALL_PATH/.git" ]; then
-  chicle_log --info "shiv already installed — updating..."
-  chicle_spin --title "Pulling latest" -- \
-    git -C "$SHIV_INSTALL_PATH" pull --ff-only --quiet
-  chicle_log --success "shiv updated"
+  if [ -n "$SHIV_REF" ]; then
+    chicle_log --info "shiv pinned to $SHIV_REF — checking out..."
+    chicle_spin --title "Fetching ref" -- \
+      git -C "$SHIV_INSTALL_PATH" fetch --quiet origin "$SHIV_REF"
+    git -C "$SHIV_INSTALL_PATH" checkout "$SHIV_REF" --quiet
+    chicle_log --success "shiv updated to $SHIV_REF"
+  else
+    chicle_log --info "shiv already installed — updating..."
+    chicle_spin --title "Pulling latest" -- \
+      git -C "$SHIV_INSTALL_PATH" pull --ff-only --quiet
+    chicle_log --success "shiv updated"
+  fi
 else
   mkdir -p "$(dirname "$SHIV_INSTALL_PATH")"
-  chicle_spin --title "Cloning shiv" -- \
-    git clone --quiet https://github.com/KnickKnackLabs/shiv.git "$SHIV_INSTALL_PATH"
+  if [ -n "$SHIV_REF" ]; then
+    # Commit SHAs can't use --branch; detect by checking ls-remote first
+    if git ls-remote "https://github.com/KnickKnackLabs/shiv.git" "$SHIV_REF" 2>/dev/null | grep -q .; then
+      # Named ref (tag or branch) — shallow single-branch clone
+      chicle_spin --title "Cloning shiv@$SHIV_REF" -- \
+        git clone --quiet --branch "$SHIV_REF" --depth 1 --single-branch \
+          https://github.com/KnickKnackLabs/shiv.git "$SHIV_INSTALL_PATH"
+    else
+      # Commit SHA — shallow clone then fetch the specific commit
+      chicle_spin --title "Cloning shiv@$SHIV_REF" -- \
+        git clone --quiet --depth 1 --single-branch \
+          https://github.com/KnickKnackLabs/shiv.git "$SHIV_INSTALL_PATH"
+      git -C "$SHIV_INSTALL_PATH" fetch --quiet --depth 1 origin "$SHIV_REF"
+      git -C "$SHIV_INSTALL_PATH" checkout --quiet "$SHIV_REF"
+    fi
+  else
+    chicle_spin --title "Cloning shiv" -- \
+      git clone --quiet --single-branch \
+        https://github.com/KnickKnackLabs/shiv.git "$SHIV_INSTALL_PATH"
+  fi
   chicle_log --success "shiv cloned to $SHIV_INSTALL_PATH"
 fi
 

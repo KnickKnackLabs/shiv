@@ -43,6 +43,14 @@ update_one() {
     return 1
   fi
 
+  # Skip frozen refs (detached HEAD = tag or commit pin)
+  if ! git -C "$repo" symbolic-ref HEAD &>/dev/null; then
+    local ref
+    ref=$(shiv_registry_ref "$name")
+    echo "  · $name  pinned to ${ref:-unknown ref} — skipping"
+    return 0
+  fi
+
   local branch before after output version dirty_marker
   branch=$(git -C "$repo" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "-")
   before=$(git -C "$repo" rev-parse --short HEAD 2>/dev/null || echo "unknown")
@@ -119,7 +127,7 @@ else
   fi
   echo "Updating $COUNT tool(s)..."
   echo ""
-  while IFS=$'\t' read -r name repo; do
+  while IFS=$'\t' read -r name repo _ref; do
     update_one "$name" || true
   done < <(shiv_registry_entries)
 fi

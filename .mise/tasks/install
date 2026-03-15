@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #MISE description="Install a tool — from the package index or a local path"
-#USAGE arg "<name>" help="Package name (e.g., shimmer, frames)"
+#USAGE arg "<name>" help="Package name, optionally with ref (e.g., shimmer, frames@v1.0.0)"
 #USAGE arg "[path]" help="Local path to repo (optional — if omitted, clones from package index)"
 #USAGE flag "--as <alias>" var=#true help="Command alias(es) — creates symlinks to the package shim"
 set -eo pipefail
@@ -12,6 +12,13 @@ NAME="${usage_name}"
 LOCAL_PATH="${usage_path:-}"
 SEP='|'
 
+# Parse name@ref syntax
+REF=""
+if [[ "$NAME" == *@* ]]; then
+  REF="${NAME#*@}"
+  NAME="${NAME%%@*}"
+fi
+
 # Collect aliases from --as flags (var=#true gives space-separated string)
 ALIASES=()
 if [ -n "${usage_as:-}" ]; then
@@ -20,6 +27,10 @@ fi
 
 if [ -n "$LOCAL_PATH" ]; then
   # Local install — point at an existing repo
+  if [ -n "$REF" ]; then
+    echo "Error: @ref syntax is not supported with local path installs" >&2
+    exit 1
+  fi
   TOOL_PATH="$(cd "$LOCAL_PATH" && pwd)"
 else
   # Package install — look up in sources and clone
@@ -38,14 +49,49 @@ else
     exit 1
   fi
 
+  # Detect ref type if a ref was specified
+  REF_TYPE=""
+  if [ -n "$REF" ]; then
+    REF_TYPE=$(shiv_detect_ref_type "$GH_REPO" "$REF") || exit 1
+  fi
+
   TOOL_PATH="$SHIV_PACKAGES_DIR/$NAME"
 
+  # If already cloned but ref changed, re-clone
   if [ -d "$TOOL_PATH" ]; then
+    EXISTING_REF=$(shiv_registry_ref "$NAME")
+    if [ "$REF" != "$EXISTING_REF" ]; then
+      echo "  Ref changed (${EXISTING_REF:-default} → ${REF:-default}), re-cloning..."
+      rm -rf "$TOOL_PATH"
+    fi
+  fi
+
+  if [ -d "$TOOL_PATH" ]; then
+    # Already cloned, same ref
     echo "  Already cloned: $TOOL_PATH"
-    gum spin --title "  Pulling latest..." --show-error -- git -C "$TOOL_PATH" pull --ff-only
+    if git -C "$TOOL_PATH" symbolic-ref HEAD &>/dev/null; then
+      gum spin --title "  Pulling latest..." --show-error -- git -C "$TOOL_PATH" pull --ff-only
+    else
+      echo "  Pinned to ${REF} — skipping pull"
+    fi
   else
     mkdir -p "$SHIV_PACKAGES_DIR"
-    gum spin --title "  Cloning $GH_REPO..." --show-error -- gh repo clone "$GH_REPO" "$TOOL_PATH"
+    case "$REF_TYPE" in
+      "")
+        gum spin --title "  Cloning $GH_REPO..." --show-error -- gh repo clone "$GH_REPO" "$TOOL_PATH" -- --single-branch
+        ;;
+      branch)
+        gum spin --title "  Cloning $GH_REPO@$REF..." --show-error -- gh repo clone "$GH_REPO" "$TOOL_PATH" -- --branch "$REF" --single-branch
+        ;;
+      tag)
+        gum spin --title "  Cloning $GH_REPO@$REF..." --show-error -- gh repo clone "$GH_REPO" "$TOOL_PATH" -- --branch "$REF" --depth 1 --single-branch
+        ;;
+      commit)
+        gum spin --title "  Cloning $GH_REPO@$REF..." --show-error -- gh repo clone "$GH_REPO" "$TOOL_PATH" -- --depth 1 --single-branch
+        git -C "$TOOL_PATH" fetch --depth 1 origin "$REF" 2>&1 | sed 's/^/  /'
+        git -C "$TOOL_PATH" checkout "$REF" 2>&1 | sed 's/^/  /'
+        ;;
+    esac
   fi
 
   # Set up dependencies
@@ -58,7 +104,7 @@ if [ ! -f "$TOOL_PATH/mise.toml" ]; then
 fi
 
 shiv_create_shim "$NAME" "$TOOL_PATH"
-shiv_register "$NAME" "$TOOL_PATH" "${ALIASES[@]}"
+SHIV_REF="$REF" shiv_register "$NAME" "$TOOL_PATH" "${ALIASES[@]}"
 shiv_cache_tasks "$NAME" "$TOOL_PATH"
 
 # Create alias symlinks
@@ -68,7 +114,7 @@ fi
 
 # --- Summary card ---
 echo ""
-echo "  ✓ Installed $NAME"
+echo "  ✓ Installed $NAME${REF:+@$REF}"
 echo ""
 
 # Gather git metadata
