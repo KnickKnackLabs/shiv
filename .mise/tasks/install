@@ -67,7 +67,9 @@ else
       # we might be running from (e.g., shiv reinstalling itself)
       echo "  Ref changed (${EXISTING_REF:-default} → ${REF:-default}), switching..."
       git -C "$TOOL_PATH" fetch origin 2>&1 | sed 's/^/  /'
-      git -C "$TOOL_PATH" checkout "$REF" 2>&1 | sed 's/^/  /'
+      # Empty ref means "back to default branch"
+      local checkout_target="${REF:-$(git -C "$TOOL_PATH" remote show origin 2>/dev/null | sed -n 's/.*HEAD branch: //p')}"
+      git -C "$TOOL_PATH" checkout "$checkout_target" 2>&1 | sed 's/^/  /'
     elif [ "$REF" != "$EXISTING_REF" ] && [ "$REF" = "$CURRENT_BRANCH" ]; then
       # e.g., installing tool@main when already on main — just update the registry
       :
