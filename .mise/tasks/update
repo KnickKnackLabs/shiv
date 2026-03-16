@@ -104,7 +104,10 @@ update_one() {
   shiv_cache_tasks "$name" "$repo"
 
   # Recreate alias symlinks
-  mapfile -t aliases < <(shiv_registry_aliases "$name")
+  aliases=()
+  while IFS= read -r _alias; do
+    [ -n "$_alias" ] && aliases+=("$_alias")
+  done < <(shiv_registry_aliases "$name")
   if [ ${#aliases[@]} -gt 0 ]; then
     shiv_create_alias_symlinks "$name" "${aliases[@]}"
   fi

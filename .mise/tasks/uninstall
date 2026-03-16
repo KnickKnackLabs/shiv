@@ -48,7 +48,10 @@ fi
 
 # Gather metadata for summary card
 TOOL_PATH=$(shiv_registry_path "$NAME")
-mapfile -t ALIASES < <(shiv_registry_aliases "$NAME")
+ALIASES=()
+while IFS= read -r _alias; do
+  [ -n "$_alias" ] && ALIASES+=("$_alias")
+done < <(shiv_registry_aliases "$NAME")
 
 # Annotate PATH and SHIM with "(not found)" if missing
 path_display="${TOOL_PATH:--}"

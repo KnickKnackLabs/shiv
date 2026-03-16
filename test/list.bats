@@ -163,7 +163,10 @@ extract_packages() {
   run run_list
   [ "$status" -eq 0 ]
 
-  mapfile -t packages < <(echo "$output" | extract_packages)
+  packages=()
+  while IFS= read -r _pkg; do
+    [ -n "$_pkg" ] && packages+=("$_pkg")
+  done < <(echo "$output" | extract_packages)
   [ "${packages[0]}" = "alpha" ]
   [ "${packages[1]}" = "bravo" ]
   [ "${packages[2]}" = "charlie" ]
@@ -180,7 +183,10 @@ extract_packages() {
   run run_list --sort name --desc
   [ "$status" -eq 0 ]
 
-  mapfile -t packages < <(echo "$output" | extract_packages)
+  packages=()
+  while IFS= read -r _pkg; do
+    [ -n "$_pkg" ] && packages+=("$_pkg")
+  done < <(echo "$output" | extract_packages)
   [ "${packages[0]}" = "charlie" ]
   [ "${packages[1]}" = "bravo" ]
   [ "${packages[2]}" = "alpha" ]
@@ -201,7 +207,10 @@ extract_packages() {
   run run_list --sort updated
   [ "$status" -eq 0 ]
 
-  mapfile -t packages < <(echo "$output" | extract_packages)
+  packages=()
+  while IFS= read -r _pkg; do
+    [ -n "$_pkg" ] && packages+=("$_pkg")
+  done < <(echo "$output" | extract_packages)
   [ "${packages[0]}" = "new" ]
   [ "${packages[1]}" = "mid" ]
   [ "${packages[2]}" = "old" ]
@@ -218,7 +227,10 @@ extract_packages() {
   run run_list --sort updated --asc
   [ "$status" -eq 0 ]
 
-  mapfile -t packages < <(echo "$output" | extract_packages)
+  packages=()
+  while IFS= read -r _pkg; do
+    [ -n "$_pkg" ] && packages+=("$_pkg")
+  done < <(echo "$output" | extract_packages)
   [ "${packages[0]}" = "old" ]
   [ "${packages[1]}" = "mid" ]
   [ "${packages[2]}" = "new" ]

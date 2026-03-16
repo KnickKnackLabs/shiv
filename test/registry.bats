@@ -71,7 +71,10 @@ teardown() {
 
 @test "registry: shiv_registry_aliases returns aliases" {
   shiv_register "foo" "/path/to/foo" "f" "fo"
-  mapfile -t aliases < <(shiv_registry_aliases "foo")
+  aliases=()
+  while IFS= read -r _alias; do
+    [ -n "$_alias" ] && aliases+=("$_alias")
+  done < <(shiv_registry_aliases "foo")
   [ "${#aliases[@]}" -eq 2 ]
   [ "${aliases[0]}" = "f" ]
   [ "${aliases[1]}" = "fo" ]
@@ -106,7 +109,10 @@ teardown() {
 @test "registry: shiv_registry_set_aliases updates aliases" {
   shiv_register "foo" "/path/to/foo" "f"
   shiv_registry_set_aliases "foo" "f" "fo" "x"
-  mapfile -t aliases < <(shiv_registry_aliases "foo")
+  aliases=()
+  while IFS= read -r _alias; do
+    [ -n "$_alias" ] && aliases+=("$_alias")
+  done < <(shiv_registry_aliases "foo")
   [ "${#aliases[@]}" -eq 3 ]
 }
 

@@ -83,7 +83,10 @@ else
     fi
 
     # Check alias symlinks
-    mapfile -t aliases < <(shiv_registry_aliases "$name")
+    aliases=()
+    while IFS= read -r _alias; do
+      [ -n "$_alias" ] && aliases+=("$_alias")
+    done < <(shiv_registry_aliases "$name")
     for alias in "${aliases[@]}"; do
       if [ ! -L "$SHIV_BIN_DIR/$alias" ]; then
         issues+="    ✗ alias symlink missing: $SHIV_BIN_DIR/$alias"$'\n'
