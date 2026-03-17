@@ -3,8 +3,7 @@
 #USAGE arg "<name>" help="Package name or alias to look up"
 set -eo pipefail
 
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-source "$REPO_DIR/lib/shim.sh"
+source "$MISE_CONFIG_ROOT/lib/shim.sh"
 
 NAME="${usage_name}"
 

@@ -2,7 +2,7 @@
 #MISE description="Validate registry.json against the schema"
 set -eo pipefail
 
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+REPO_DIR="$MISE_CONFIG_ROOT"
 source "$REPO_DIR/lib/registry.sh"
 
 shiv_init_registry

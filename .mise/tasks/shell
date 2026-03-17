@@ -2,7 +2,7 @@
 #MISE description="Output shell configuration (PATH, env vars) for eval"
 set -eo pipefail
 
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+REPO_DIR="$MISE_CONFIG_ROOT"
 source "$REPO_DIR/lib/shim.sh"
 
 # Self-hosting: bootstrap shiv into packages/ if not already registered

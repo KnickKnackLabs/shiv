@@ -2,5 +2,4 @@
 #MISE description="Run doctor tests (BATS)"
 set -e
 
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-bats "$REPO_DIR/test/doctor.bats"
+bats "$MISE_CONFIG_ROOT/test/doctor.bats"

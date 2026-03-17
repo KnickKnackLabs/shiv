@@ -5,7 +5,7 @@
 #USAGE flag "--as <alias>" var=#true help="Command alias(es) — creates symlinks to the package shim"
 set -eo pipefail
 
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+REPO_DIR="$MISE_CONFIG_ROOT"
 source "$REPO_DIR/lib/shim.sh"
 
 NAME="${usage_name}"

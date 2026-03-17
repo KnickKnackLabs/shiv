@@ -3,8 +3,7 @@
 #MISE hide=true
 set -eo pipefail
 
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}"/)/../../.." && pwd)"
-source "$REPO_DIR/lib/shim.sh"
+source "$MISE_CONFIG_ROOT/lib/shim.sh"
 
 shiv_init_registry
 
