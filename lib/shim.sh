@@ -39,7 +39,7 @@ if [ ! -d "\$REPO" ]; then
   echo "$name: run 'shiv doctor' to diagnose" >&2
   exit 1
 fi
-export CALLER_PWD="\$PWD"
+export CALLER_PWD="\${CALLER_PWD:-\$PWD}"
 if [ "\$(basename "\$PWD")" = "$name" ] && [ "\$PWD" != "$repo_dir" ]; then
   echo "$name: warning: you're in a directory called '$name' but running the shiv-installed copy" >&2
   echo "$name: shiv package: $repo_dir" >&2

@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+#MISE description="Run shim runtime tests (BATS)"
+set -e
+
+bats "$MISE_CONFIG_ROOT/test/shim.bats"
