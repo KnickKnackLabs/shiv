@@ -313,3 +313,119 @@ run_install() {
   echo "$output" | grep -q "alpha"
   echo "$output" | grep -q "bravo"
 }
+
+# ============================================================================
+# Default task detection
+# ============================================================================
+
+# Helper: create a repo with a named task matching the package name
+create_repo_with_named_task() {
+  local name="$1"
+  local repo_dir="$TEST_HOME/repos/$name"
+
+  mkdir -p "$repo_dir/.mise/tasks"
+  git -C "$repo_dir" init -q -b main
+  git -C "$repo_dir" config user.email "test@test.com"
+  git -C "$repo_dir" config user.name "Test"
+
+  echo '[tools]' > "$repo_dir/mise.toml"
+
+  cat > "$repo_dir/.mise/tasks/$name" <<'TASK'
+#!/usr/bin/env bash
+#MISE description="The default command"
+echo "default-task-ran:$*"
+TASK
+  chmod +x "$repo_dir/.mise/tasks/$name"
+
+  git -C "$repo_dir" add .
+  git -C "$repo_dir" commit -q -m "init"
+
+  mkdir -p "$SHIV_CACHE_DIR/completions"
+  printf '%s\tThe default command\n' "$name" > "$SHIV_CACHE_DIR/completions/$name.cache"
+
+  echo "$repo_dir"
+}
+
+# Helper: create a repo with a _default task
+create_repo_with_default_task() {
+  local name="$1"
+  local repo_dir="$TEST_HOME/repos/$name"
+
+  mkdir -p "$repo_dir/.mise/tasks"
+  git -C "$repo_dir" init -q -b main
+  git -C "$repo_dir" config user.email "test@test.com"
+  git -C "$repo_dir" config user.name "Test"
+
+  echo '[tools]' > "$repo_dir/mise.toml"
+
+  cat > "$repo_dir/.mise/tasks/_default" <<'TASK'
+#!/usr/bin/env bash
+#MISE description="The default command"
+echo "default-task-ran:$*"
+TASK
+  chmod +x "$repo_dir/.mise/tasks/_default"
+
+  git -C "$repo_dir" add .
+  git -C "$repo_dir" commit -q -m "init"
+
+  mkdir -p "$SHIV_CACHE_DIR/completions"
+  printf '_default\tThe default command\n' > "$SHIV_CACHE_DIR/completions/$name.cache"
+
+  echo "$repo_dir"
+}
+
+@test "install: shim bakes DEFAULT_TASK when repo has matching named task" {
+  local repo_dir
+  repo_dir=$(create_repo_with_named_task "calc")
+  run_install "calc" "$repo_dir"
+
+  grep -q 'DEFAULT_TASK="calc"' "$SHIV_BIN_DIR/calc"
+}
+
+@test "install: shim bakes DEFAULT_TASK when repo has _default task" {
+  local repo_dir
+  repo_dir=$(create_repo_with_default_task "calc")
+  run_install "calc" "$repo_dir"
+
+  grep -q 'DEFAULT_TASK="_default"' "$SHIV_BIN_DIR/calc"
+}
+
+@test "install: shim has empty DEFAULT_TASK when no matching task exists" {
+  local repo_dir
+  repo_dir=$(create_local_repo "myapp")
+  run_install "myapp" "$repo_dir"
+
+  grep -q 'DEFAULT_TASK=""' "$SHIV_BIN_DIR/myapp"
+}
+
+@test "install: named task takes precedence over _default" {
+  local repo_dir="$TEST_HOME/repos/both"
+  mkdir -p "$repo_dir/.mise/tasks"
+  git -C "$repo_dir" init -q -b main
+  git -C "$repo_dir" config user.email "test@test.com"
+  git -C "$repo_dir" config user.name "Test"
+
+  echo '[tools]' > "$repo_dir/mise.toml"
+
+  cat > "$repo_dir/.mise/tasks/both" <<'TASK'
+#!/usr/bin/env bash
+#MISE description="Named task"
+echo "named"
+TASK
+  chmod +x "$repo_dir/.mise/tasks/both"
+
+  cat > "$repo_dir/.mise/tasks/_default" <<'TASK'
+#!/usr/bin/env bash
+#MISE description="Default task"
+echo "default"
+TASK
+  chmod +x "$repo_dir/.mise/tasks/_default"
+
+  git -C "$repo_dir" add .
+  git -C "$repo_dir" commit -q -m "init"
+  mkdir -p "$SHIV_CACHE_DIR/completions"
+  printf 'both\tNamed task\n_default\tDefault task\n' > "$SHIV_CACHE_DIR/completions/both.cache"
+
+  run_install "both" "$repo_dir"
+  grep -q 'DEFAULT_TASK="both"' "$SHIV_BIN_DIR/both"
+}

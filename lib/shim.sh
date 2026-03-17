@@ -17,11 +17,23 @@ SHIV_PACKAGES_DIR="${SHIV_PACKAGES_DIR:-$SHIV_DATA_DIR/packages}"
 # Create a shim for a tool
 shiv_create_shim() {
   local name="$1" repo_dir="$2"
+  local default_task=""
+
+  # At install time, detect a default task for single-command tools.
+  # Checks .mise/tasks/<name> first, then .mise/tasks/_default.
+  # Enables "numnum 3.14" instead of "numnum numnum 3.14".
+  if [ -f "$repo_dir/.mise/tasks/$name" ]; then
+    default_task="$name"
+  elif [ -f "$repo_dir/.mise/tasks/_default" ]; then
+    default_task="_default"
+  fi
+
   mkdir -p "$SHIV_BIN_DIR"
   cat > "$SHIV_BIN_DIR/$name" <<SCRIPT
 #!/usr/bin/env bash
 # managed by shiv
 REPO="$repo_dir"
+DEFAULT_TASK="${default_task}"
 if [ ! -d "\$REPO" ]; then
   echo "$name: repo not found at \$REPO" >&2
   echo "$name: run 'shiv doctor' to diagnose" >&2
@@ -40,6 +52,11 @@ case "\${1:-}" in
     exec mise -C "\$REPO" tasks
     ;;
   *)
+    if [ -n "\$DEFAULT_TASK" ] && [ -z "\${1:-}" ]; then
+      exec mise -C "\$REPO" run -q "\$DEFAULT_TASK"
+    elif [ -n "\$DEFAULT_TASK" ]; then
+      exec mise -C "\$REPO" run -q "\$DEFAULT_TASK" "\$@"
+    fi
     exec mise -C "\$REPO" run -q "\$@"
     ;;
 esac
