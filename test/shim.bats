@@ -61,31 +61,31 @@ TASK
 # CALLER_PWD propagation
 # ============================================================================
 
-@test "shim: template uses conditional CALLER_PWD assignment" {
+@test "shim: template uses unconditional CALLER_PWD assignment" {
   local repo_dir
   repo_dir=$(create_caller_repo "myapp")
   shiv install myapp "$repo_dir" 2>/dev/null
 
-  grep -q 'CALLER_PWD="${CALLER_PWD:-$PWD}"' "$SHIV_BIN_DIR/myapp"
+  grep -q 'CALLER_PWD="$PWD"' "$SHIV_BIN_DIR/myapp"
 }
 
-@test "shim: defaults CALLER_PWD to PWD when not pre-set" {
+@test "shim: CALLER_PWD reflects actual cwd" {
   local repo_dir
   repo_dir=$(create_caller_repo "myapp")
   shiv install myapp "$repo_dir" 2>/dev/null
 
-  run bash -c "unset CALLER_PWD; cd /tmp && '$SHIV_BIN_DIR/myapp' show-caller"
+  run bash -c "cd /tmp && '$SHIV_BIN_DIR/myapp' show-caller"
   [ "$status" -eq 0 ]
   [[ "$output" == *"/tmp"* ]]
 }
 
-@test "shim: preserves CALLER_PWD set by upstream package" {
+@test "shim: CALLER_PWD overrides stale value from environment" {
   local repo_dir
   repo_dir=$(create_caller_repo "myapp")
   shiv install myapp "$repo_dir" 2>/dev/null
 
-  # Simulate cross-package call: upstream shim already set CALLER_PWD
-  run bash -c "export CALLER_PWD='/some/upstream/dir' && '$SHIV_BIN_DIR/myapp' show-caller"
+  # Even if CALLER_PWD is set in the environment, the shim should use $PWD
+  run bash -c "export CALLER_PWD='/some/stale/dir' && cd /tmp && '$SHIV_BIN_DIR/myapp' show-caller"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"/some/upstream/dir"* ]]
+  [[ "$output" == *"/tmp"* ]]
 }
