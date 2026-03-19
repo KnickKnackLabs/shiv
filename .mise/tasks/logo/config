@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+#MISE description="Dump default logo config as JSON"
+set -eo pipefail
+
+REPO_DIR="${MISE_CONFIG_ROOT:-$(cd "$(dirname "$0")/../../.." && pwd)}"
+export PYTHONPATH="$REPO_DIR/lib"
+
+python3 -m logo.cli config

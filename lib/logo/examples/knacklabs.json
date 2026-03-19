@@ -1,0 +1,11 @@
+{
+  "renderer": "grid",
+  "size": 512,
+  "columns": 6,
+  "rows": 6,
+  "gap": 6,
+  "corner_radius": 8,
+  "shape": "square",
+  "palette": "vivid",
+  "seed": 42
+}

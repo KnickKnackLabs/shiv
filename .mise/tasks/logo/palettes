@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+#MISE description="List available color palettes"
+#USAGE flag "--json" help="Output as JSON"
+set -eo pipefail
+
+REPO_DIR="${MISE_CONFIG_ROOT:-$(cd "$(dirname "$0")/../../.." && pwd)}"
+export PYTHONPATH="$REPO_DIR/lib"
+
+args=("palettes")
+[[ "${usage_json:-}" == "true" ]] && args+=("--json")
+
+python3 -m logo.cli "${args[@]}"

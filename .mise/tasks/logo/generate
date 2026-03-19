@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+#MISE description="Generate a logo from config or CLI flags"
+#USAGE flag "-c --config <path>" help="Path to JSON config file"
+#USAGE flag "-o --output <path>" help="Output file (default: stdout)"
+#USAGE flag "-r --renderer <name>" help="Renderer name (default: grid)"
+#USAGE flag "-s --size <px>" help="Canvas size in pixels"
+#USAGE flag "--columns <n>" help="Grid columns"
+#USAGE flag "--rows <n>" help="Grid rows"
+#USAGE flag "--gap <px>" help="Gap between cells"
+#USAGE flag "--corner-radius <px>" help="Corner radius for squares"
+#USAGE flag "--shape <shape>" help="Cell shape: square, circle, diamond"
+#USAGE flag "--palette <name>" help="Color palette name"
+#USAGE flag "--seed <n>" help="Random seed for reproducibility"
+#USAGE flag "--background <color>" help="Background color (hex)"
+set -eo pipefail
+
+REPO_DIR="${MISE_CONFIG_ROOT:-$(cd "$(dirname "$0")/../../.." && pwd)}"
+export PYTHONPATH="$REPO_DIR/lib"
+
+args=("generate")
+
+[[ -n "${usage_config:-}" ]] && args+=("-c" "$usage_config")
+[[ -n "${usage_output:-}" ]] && args+=("-o" "$usage_output")
+[[ -n "${usage_renderer:-}" ]] && args+=("-r" "$usage_renderer")
+[[ -n "${usage_size:-}" ]] && args+=("-s" "$usage_size")
+[[ -n "${usage_columns:-}" ]] && args+=("--columns" "$usage_columns")
+[[ -n "${usage_rows:-}" ]] && args+=("--rows" "$usage_rows")
+[[ -n "${usage_gap:-}" ]] && args+=("--gap" "$usage_gap")
+[[ -n "${usage_corner_radius:-}" ]] && args+=("--corner-radius" "$usage_corner_radius")
+[[ -n "${usage_shape:-}" ]] && args+=("--shape" "$usage_shape")
+[[ -n "${usage_palette:-}" ]] && args+=("--palette" "$usage_palette")
+[[ -n "${usage_seed:-}" ]] && args+=("--seed" "$usage_seed")
+[[ -n "${usage_background:-}" ]] && args+=("--background" "$usage_background")
+
+python3 -m logo.cli "${args[@]}"
