@@ -64,9 +64,10 @@ case "\${1:-}" in
       exec mise -C "\$REPO" run -q "\$@"
     fi
     mise -C "\$REPO" tasks
+    rc=\$?
     echo "" >&2
-    echo "To override this output, create .mise/tasks/tasks in the package." >&2
-    exit 0
+    echo "To override this output, create .mise/tasks/tasks in the package and reinstall." >&2
+    exit \$rc
     ;;
   *)
     if [ -n "\$DEFAULT_TASK" ] && [ -z "\${1:-}" ]; then
