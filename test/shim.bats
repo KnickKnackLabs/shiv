@@ -89,3 +89,40 @@ TASK
   [ "$status" -eq 0 ]
   [[ "$output" == *"/tmp"* ]]
 }
+
+# ============================================================================
+# tasks interception
+# ============================================================================
+
+@test "shim: 'tasks' lists available tasks when no tasks task exists" {
+  local repo_dir
+  repo_dir=$(create_caller_repo "myapp")
+  shiv install myapp "$repo_dir" 2>/dev/null
+
+  run "$SHIV_BIN_DIR/myapp" tasks
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"show-caller"* ]]
+  [[ "$output" == *"override"* ]]
+}
+
+@test "shim: 'tasks' runs the package's tasks task when one exists" {
+  local repo_dir
+  repo_dir=$(create_caller_repo "myapp")
+
+  # Add a custom 'tasks' task
+  cat > "$repo_dir/.mise/tasks/tasks" <<'TASK'
+#!/usr/bin/env bash
+#MISE description="Custom tasks listing"
+echo "CUSTOM_TASKS_OUTPUT"
+TASK
+  chmod +x "$repo_dir/.mise/tasks/tasks"
+  git -C "$repo_dir" add . && git -C "$repo_dir" commit -q -m "add tasks task"
+
+  shiv install myapp "$repo_dir" 2>/dev/null
+
+  run "$SHIV_BIN_DIR/myapp" tasks
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"CUSTOM_TASKS_OUTPUT"* ]]
+  # Should NOT show the override hint
+  [[ "$output" != *"override"* ]]
+}

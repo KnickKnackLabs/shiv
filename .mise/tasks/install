@@ -202,7 +202,3 @@ alias_display="${alias_display:--}"
 if [ "$tasks_truncated" = "true" ]; then
   gum style --faint "  Run '$NAME tasks' to see all $task_count tasks."
 fi
-
-echo ""
-echo "Reload your shell or run:"
-gum style --faint "  eval \"\$(mise -C $REPO_DIR run -q shell)\""
