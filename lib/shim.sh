@@ -28,12 +28,20 @@ shiv_create_shim() {
     default_task="_default"
   fi
 
+  # At install time, detect if the package has its own 'tasks' task.
+  # If not, the shim intercepts `<name> tasks` to show the task list.
+  local has_tasks_task=""
+  if [ -f "$repo_dir/.mise/tasks/tasks" ]; then
+    has_tasks_task="true"
+  fi
+
   mkdir -p "$SHIV_BIN_DIR"
   cat > "$SHIV_BIN_DIR/$name" <<SCRIPT
 #!/usr/bin/env bash
 # managed by shiv
 REPO="$repo_dir"
 DEFAULT_TASK="${default_task}"
+HAS_TASKS_TASK="${has_tasks_task}"
 if [ ! -d "\$REPO" ]; then
   echo "$name: repo not found at \$REPO" >&2
   echo "$name: run 'shiv doctor' to diagnose" >&2
@@ -50,6 +58,15 @@ fi
 case "\${1:-}" in
   --help|-h|help)
     exec mise -C "\$REPO" tasks
+    ;;
+  tasks)
+    if [ "\$HAS_TASKS_TASK" = "true" ]; then
+      exec mise -C "\$REPO" run -q "\$@"
+    fi
+    mise -C "\$REPO" tasks
+    echo "" >&2
+    echo "To override this output, create .mise/tasks/tasks in the package." >&2
+    exit 0
     ;;
   *)
     if [ -n "\$DEFAULT_TASK" ] && [ -z "\${1:-}" ]; then
