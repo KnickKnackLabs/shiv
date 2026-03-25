@@ -7,9 +7,9 @@
 # Usage:
 #   shiv_resolve_task <task_map_file> [args...]
 #
-# Output (stdout):
-#   Line 1: resolved task name (colon-joined, e.g. "agent:message")
-#   Line 2: remaining args (space-separated, may be empty)
+# Output (via variables — no stdout):
+#   SHIV_RESOLVED_TASK  — colon-joined task name (e.g. "agent:message")
+#   SHIV_RESOLVED_ARGS  — array of remaining arguments (preserves quoting)
 #
 # Exit codes:
 #   0 — matched unambiguously
@@ -17,11 +17,15 @@
 #   2 — no match found (caller should fall through to mise)
 
 # Resolve space-separated arguments to a colon-joined task name.
-# Pure function — reads from the task map file, no side effects.
+# Pure function — reads from the task map file, no side effects beyond
+# setting SHIV_RESOLVED_TASK and SHIV_RESOLVED_ARGS.
 shiv_resolve_task() {
   local task_map_file="$1"
   shift
   local args=("$@")
+
+  SHIV_RESOLVED_TASK=""
+  SHIV_RESOLVED_ARGS=()
 
   # No args — nothing to resolve
   if [ ${#args[@]} -eq 0 ]; then
@@ -59,16 +63,12 @@ shiv_resolve_task() {
       return 2
     fi
 
-    # Join task words with colons
-    local task
-    task=$(IFS=":"; echo "${task_words[*]}")
-
     # Verify the task exists in the map (join with spaces for lookup)
     local task_spaced
     task_spaced=$(IFS=" "; echo "${task_words[*]}")
     if grep -qxF "$task_spaced" "$task_map_file"; then
-      echo "$task"
-      echo "${remaining_args[*]}"
+      SHIV_RESOLVED_TASK=$(IFS=":"; echo "${task_words[*]}")
+      SHIV_RESOLVED_ARGS=("${remaining_args[@]}")
       return 0
     fi
 
@@ -116,8 +116,6 @@ shiv_resolve_task() {
   done
 
   if [ "$shorter_match" -eq 1 ]; then
-    # Ambiguous — the longest match consumed all remaining words as task path,
-    # but a shorter match exists that would leave some as args.
     local long_task_spaced
     long_task_spaced=$(IFS=" "; echo "${args[*]:0:$best_len}")
     local long_task
@@ -141,13 +139,9 @@ shiv_resolve_task() {
   fi
 
   # ------------------------------------------------------------------
-  # Unambiguous match — return task + remaining args
+  # Unambiguous match
   # ------------------------------------------------------------------
-  local task
-  task=$(IFS=":"; echo "${args[*]:0:$best_len}")
-  local remaining_args=("${args[@]:$best_len}")
-
-  echo "$task"
-  echo "${remaining_args[*]}"
+  SHIV_RESOLVED_TASK=$(IFS=":"; echo "${args[*]:0:$best_len}")
+  SHIV_RESOLVED_ARGS=("${args[@]:$best_len}")
   return 0
 }

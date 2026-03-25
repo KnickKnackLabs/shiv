@@ -194,49 +194,37 @@ _make_task_map() {
 @test "resolve: single-word task" {
   local map
   map=$(_make_task_map "mytool" "install" "list" "doctor")
-  run shiv_resolve_task "$map" "install"
-  [ "$status" -eq 0 ]
-  local task args
-  task=$(echo "$output" | sed -n '1p')
-  args=$(echo "$output" | sed -n '2p')
-  [ "$task" = "install" ]
-  [ "$args" = "" ]
+  shiv_resolve_task "$map" "install"
+  [ "$SHIV_RESOLVED_TASK" = "install" ]
+  [ ${#SHIV_RESOLVED_ARGS[@]} -eq 0 ]
 }
 
 @test "resolve: multi-word task translates to colons" {
   local map
   map=$(_make_task_map "mytool" "agent message" "agent list" "as")
-  run shiv_resolve_task "$map" "agent" "message" "foo"
-  [ "$status" -eq 0 ]
-  local task args
-  task=$(echo "$output" | sed -n '1p')
-  args=$(echo "$output" | sed -n '2p')
-  [ "$task" = "agent:message" ]
-  [ "$args" = "foo" ]
+  shiv_resolve_task "$map" "agent" "message" "foo"
+  [ "$SHIV_RESOLVED_TASK" = "agent:message" ]
+  [ ${#SHIV_RESOLVED_ARGS[@]} -eq 1 ]
+  [ "${SHIV_RESOLVED_ARGS[0]}" = "foo" ]
 }
 
 @test "resolve: multi-word task with multiple remaining args" {
   local map
   map=$(_make_task_map "mytool" "agent message")
-  run shiv_resolve_task "$map" "agent" "message" "foo" "bar" "baz"
-  [ "$status" -eq 0 ]
-  local task args
-  task=$(echo "$output" | sed -n '1p')
-  args=$(echo "$output" | sed -n '2p')
-  [ "$task" = "agent:message" ]
-  [ "$args" = "foo bar baz" ]
+  shiv_resolve_task "$map" "agent" "message" "foo" "bar" "baz"
+  [ "$SHIV_RESOLVED_TASK" = "agent:message" ]
+  [ ${#SHIV_RESOLVED_ARGS[@]} -eq 3 ]
+  [ "${SHIV_RESOLVED_ARGS[0]}" = "foo" ]
+  [ "${SHIV_RESOLVED_ARGS[1]}" = "bar" ]
+  [ "${SHIV_RESOLVED_ARGS[2]}" = "baz" ]
 }
 
 @test "resolve: deep nesting (3+ levels)" {
   local map
   map=$(_make_task_map "mytool" "dev test unit" "dev test integration" "build")
-  run shiv_resolve_task "$map" "dev" "test" "unit"
-  [ "$status" -eq 0 ]
-  local task args
-  task=$(echo "$output" | sed -n '1p')
-  args=$(echo "$output" | sed -n '2p')
-  [ "$task" = "dev:test:unit" ]
-  [ "$args" = "" ]
+  shiv_resolve_task "$map" "dev" "test" "unit"
+  [ "$SHIV_RESOLVED_TASK" = "dev:test:unit" ]
+  [ ${#SHIV_RESOLVED_ARGS[@]} -eq 0 ]
 }
 
 @test "resolve: no match returns exit 2" {
@@ -264,13 +252,10 @@ _make_task_map() {
   # 'agent message' exists but 'agent' does NOT — no ambiguity
   local map
   map=$(_make_task_map "mytool" "agent message" "agent list" "build")
-  run shiv_resolve_task "$map" "agent" "message" "foo"
-  [ "$status" -eq 0 ]
-  local task args
-  task=$(echo "$output" | sed -n '1p')
-  args=$(echo "$output" | sed -n '2p')
-  [ "$task" = "agent:message" ]
-  [ "$args" = "foo" ]
+  shiv_resolve_task "$map" "agent" "message" "foo"
+  [ "$SHIV_RESOLVED_TASK" = "agent:message" ]
+  [ ${#SHIV_RESOLVED_ARGS[@]} -eq 1 ]
+  [ "${SHIV_RESOLVED_ARGS[0]}" = "foo" ]
 }
 
 @test "resolve: falls back to shorter match when longer doesn't exist" {
@@ -278,13 +263,10 @@ _make_task_map() {
   # user types: agent message → matches 'agent' with arg 'message'
   local map
   map=$(_make_task_map "mytool" "agent" "build")
-  run shiv_resolve_task "$map" "agent" "message"
-  [ "$status" -eq 0 ]
-  local task args
-  task=$(echo "$output" | sed -n '1p')
-  args=$(echo "$output" | sed -n '2p')
-  [ "$task" = "agent" ]
-  [ "$args" = "message" ]
+  shiv_resolve_task "$map" "agent" "message"
+  [ "$SHIV_RESOLVED_TASK" = "agent" ]
+  [ ${#SHIV_RESOLVED_ARGS[@]} -eq 1 ]
+  [ "${SHIV_RESOLVED_ARGS[0]}" = "message" ]
 }
 
 # --- Ambiguity detection ---
@@ -316,25 +298,18 @@ _make_task_map() {
   # 'test completions' exists but 'test' does NOT
   local map
   map=$(_make_task_map "mytool" "test completions" "test doctor" "install")
-  run shiv_resolve_task "$map" "test" "completions"
-  [ "$status" -eq 0 ]
-  local task args
-  task=$(echo "$output" | sed -n '1p')
-  args=$(echo "$output" | sed -n '2p')
-  [ "$task" = "test:completions" ]
-  [ "$args" = "" ]
+  shiv_resolve_task "$map" "test" "completions"
+  [ "$SHIV_RESOLVED_TASK" = "test:completions" ]
+  [ ${#SHIV_RESOLVED_ARGS[@]} -eq 0 ]
 }
 
 @test "resolve: single-word match with no children is not ambiguous" {
   local map
   map=$(_make_task_map "mytool" "install" "list" "doctor")
-  run shiv_resolve_task "$map" "install" "some-arg"
-  [ "$status" -eq 0 ]
-  local task args
-  task=$(echo "$output" | sed -n '1p')
-  args=$(echo "$output" | sed -n '2p')
-  [ "$task" = "install" ]
-  [ "$args" = "some-arg" ]
+  shiv_resolve_task "$map" "install" "some-arg"
+  [ "$SHIV_RESOLVED_TASK" = "install" ]
+  [ ${#SHIV_RESOLVED_ARGS[@]} -eq 1 ]
+  [ "${SHIV_RESOLVED_ARGS[0]}" = "some-arg" ]
 }
 
 # --- Double-dash disambiguation ---
@@ -342,37 +317,28 @@ _make_task_map() {
 @test "resolve: -- before args selects shorter task" {
   local map
   map=$(_make_task_map "mytool" "as" "as zeke")
-  run shiv_resolve_task "$map" "as" "--" "zeke"
-  [ "$status" -eq 0 ]
-  local task args
-  task=$(echo "$output" | sed -n '1p')
-  args=$(echo "$output" | sed -n '2p')
-  [ "$task" = "as" ]
-  [ "$args" = "zeke" ]
+  shiv_resolve_task "$map" "as" "--" "zeke"
+  [ "$SHIV_RESOLVED_TASK" = "as" ]
+  [ ${#SHIV_RESOLVED_ARGS[@]} -eq 1 ]
+  [ "${SHIV_RESOLVED_ARGS[0]}" = "zeke" ]
 }
 
 @test "resolve: trailing -- selects full task path with no args" {
   local map
   map=$(_make_task_map "mytool" "as" "as zeke")
-  run shiv_resolve_task "$map" "as" "zeke" "--"
-  [ "$status" -eq 0 ]
-  local task args
-  task=$(echo "$output" | sed -n '1p')
-  args=$(echo "$output" | sed -n '2p')
-  [ "$task" = "as:zeke" ]
-  [ "$args" = "" ]
+  shiv_resolve_task "$map" "as" "zeke" "--"
+  [ "$SHIV_RESOLVED_TASK" = "as:zeke" ]
+  [ ${#SHIV_RESOLVED_ARGS[@]} -eq 0 ]
 }
 
 @test "resolve: -- with multi-word task and remaining args" {
   local map
   map=$(_make_task_map "mytool" "agent message" "agent" "agent message send")
-  run shiv_resolve_task "$map" "agent" "message" "--" "hello" "world"
-  [ "$status" -eq 0 ]
-  local task args
-  task=$(echo "$output" | sed -n '1p')
-  args=$(echo "$output" | sed -n '2p')
-  [ "$task" = "agent:message" ]
-  [ "$args" = "hello world" ]
+  shiv_resolve_task "$map" "agent" "message" "--" "hello" "world"
+  [ "$SHIV_RESOLVED_TASK" = "agent:message" ]
+  [ ${#SHIV_RESOLVED_ARGS[@]} -eq 2 ]
+  [ "${SHIV_RESOLVED_ARGS[0]}" = "hello" ]
+  [ "${SHIV_RESOLVED_ARGS[1]}" = "world" ]
 }
 
 @test "resolve: -- with nonexistent task returns exit 2" {
@@ -394,13 +360,9 @@ _make_task_map() {
 @test "resolve: exact match consuming all args (no remaining)" {
   local map
   map=$(_make_task_map "mytool" "dev test unit")
-  run shiv_resolve_task "$map" "dev" "test" "unit"
-  [ "$status" -eq 0 ]
-  local task args
-  task=$(echo "$output" | sed -n '1p')
-  args=$(echo "$output" | sed -n '2p')
-  [ "$task" = "dev:test:unit" ]
-  [ "$args" = "" ]
+  shiv_resolve_task "$map" "dev" "test" "unit"
+  [ "$SHIV_RESOLVED_TASK" = "dev:test:unit" ]
+  [ ${#SHIV_RESOLVED_ARGS[@]} -eq 0 ]
 }
 
 @test "resolve: partial prefix that doesn't match any task" {
@@ -414,11 +376,18 @@ _make_task_map() {
 @test "resolve: task map with single entry" {
   local map
   map=$(_make_task_map "mytool" "hello world")
-  run shiv_resolve_task "$map" "hello" "world" "arg1"
-  [ "$status" -eq 0 ]
-  local task args
-  task=$(echo "$output" | sed -n '1p')
-  args=$(echo "$output" | sed -n '2p')
-  [ "$task" = "hello:world" ]
-  [ "$args" = "arg1" ]
+  shiv_resolve_task "$map" "hello" "world" "arg1"
+  [ "$SHIV_RESOLVED_TASK" = "hello:world" ]
+  [ ${#SHIV_RESOLVED_ARGS[@]} -eq 1 ]
+  [ "${SHIV_RESOLVED_ARGS[0]}" = "arg1" ]
+}
+
+@test "resolve: args with spaces are preserved in SHIV_RESOLVED_ARGS" {
+  local map
+  map=$(_make_task_map "mytool" "agent message")
+  shiv_resolve_task "$map" "agent" "message" "hello world" "foo"
+  [ "$SHIV_RESOLVED_TASK" = "agent:message" ]
+  [ ${#SHIV_RESOLVED_ARGS[@]} -eq 2 ]
+  [ "${SHIV_RESOLVED_ARGS[0]}" = "hello world" ]
+  [ "${SHIV_RESOLVED_ARGS[1]}" = "foo" ]
 }
