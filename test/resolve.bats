@@ -1,8 +1,7 @@
 #!/usr/bin/env bats
 # shiv space-to-colon resolution test suite
 #
-# Tests the task map cache (Phase 1) and will later include
-# matching/resolution logic (Phase 2).
+# Tests the task map cache and matching/resolution logic.
 
 REPO_DIR="$BATS_TEST_DIRNAME/.."
 
@@ -194,7 +193,7 @@ _make_task_map() {
 @test "resolve: single-word task" {
   local map
   map=$(_make_task_map "mytool" "install" "list" "doctor")
-  shiv_resolve_task "$map" "install"
+  shiv_resolve_task "mytool" "$map" "install"
   [ "$SHIV_RESOLVED_TASK" = "install" ]
   [ ${#SHIV_RESOLVED_ARGS[@]} -eq 0 ]
 }
@@ -202,7 +201,7 @@ _make_task_map() {
 @test "resolve: multi-word task translates to colons" {
   local map
   map=$(_make_task_map "mytool" "agent message" "agent list" "as")
-  shiv_resolve_task "$map" "agent" "message" "foo"
+  shiv_resolve_task "mytool" "$map" "agent" "message" "foo"
   [ "$SHIV_RESOLVED_TASK" = "agent:message" ]
   [ ${#SHIV_RESOLVED_ARGS[@]} -eq 1 ]
   [ "${SHIV_RESOLVED_ARGS[0]}" = "foo" ]
@@ -211,7 +210,7 @@ _make_task_map() {
 @test "resolve: multi-word task with multiple remaining args" {
   local map
   map=$(_make_task_map "mytool" "agent message")
-  shiv_resolve_task "$map" "agent" "message" "foo" "bar" "baz"
+  shiv_resolve_task "mytool" "$map" "agent" "message" "foo" "bar" "baz"
   [ "$SHIV_RESOLVED_TASK" = "agent:message" ]
   [ ${#SHIV_RESOLVED_ARGS[@]} -eq 3 ]
   [ "${SHIV_RESOLVED_ARGS[0]}" = "foo" ]
@@ -222,7 +221,7 @@ _make_task_map() {
 @test "resolve: deep nesting (3+ levels)" {
   local map
   map=$(_make_task_map "mytool" "dev test unit" "dev test integration" "build")
-  shiv_resolve_task "$map" "dev" "test" "unit"
+  shiv_resolve_task "mytool" "$map" "dev" "test" "unit"
   [ "$SHIV_RESOLVED_TASK" = "dev:test:unit" ]
   [ ${#SHIV_RESOLVED_ARGS[@]} -eq 0 ]
 }
@@ -230,19 +229,19 @@ _make_task_map() {
 @test "resolve: no match returns exit 2" {
   local map
   map=$(_make_task_map "mytool" "install" "list")
-  run shiv_resolve_task "$map" "nonexistent" "foo"
+  run shiv_resolve_task "mytool" "$map" "nonexistent" "foo"
   [ "$status" -eq 2 ]
 }
 
 @test "resolve: no args returns exit 2" {
   local map
   map=$(_make_task_map "mytool" "install")
-  run shiv_resolve_task "$map"
+  run shiv_resolve_task "mytool" "$map"
   [ "$status" -eq 2 ]
 }
 
 @test "resolve: missing task map file returns exit 2" {
-  run shiv_resolve_task "/nonexistent/path" "install"
+  run shiv_resolve_task "mytool" "/nonexistent/path" "install"
   [ "$status" -eq 2 ]
 }
 
@@ -252,7 +251,7 @@ _make_task_map() {
   # 'agent message' exists but 'agent' does NOT — no ambiguity
   local map
   map=$(_make_task_map "mytool" "agent message" "agent list" "build")
-  shiv_resolve_task "$map" "agent" "message" "foo"
+  shiv_resolve_task "mytool" "$map" "agent" "message" "foo"
   [ "$SHIV_RESOLVED_TASK" = "agent:message" ]
   [ ${#SHIV_RESOLVED_ARGS[@]} -eq 1 ]
   [ "${SHIV_RESOLVED_ARGS[0]}" = "foo" ]
@@ -263,7 +262,7 @@ _make_task_map() {
   # user types: agent message → matches 'agent' with arg 'message'
   local map
   map=$(_make_task_map "mytool" "agent" "build")
-  shiv_resolve_task "$map" "agent" "message"
+  shiv_resolve_task "mytool" "$map" "agent" "message"
   [ "$SHIV_RESOLVED_TASK" = "agent" ]
   [ ${#SHIV_RESOLVED_ARGS[@]} -eq 1 ]
   [ "${SHIV_RESOLVED_ARGS[0]}" = "message" ]
@@ -275,7 +274,7 @@ _make_task_map() {
   # 'test' exists AND 'test completions' exists
   local map
   map=$(_make_task_map "mytool" "test" "test completions" "test doctor" "install")
-  run shiv_resolve_task "$map" "test" "completions"
+  run shiv_resolve_task "mytool" "$map" "test" "completions"
   [ "$status" -eq 1 ]
   # Error message should mention both tasks
   [[ "$output" == *"Ambiguous"* ]]
@@ -287,7 +286,7 @@ _make_task_map() {
 @test "resolve: ambiguous error message shows disambiguation guidance" {
   local map
   map=$(_make_task_map "mytool" "as" "as zeke")
-  run shiv_resolve_task "$map" "as" "zeke"
+  run shiv_resolve_task "mytool" "$map" "as" "zeke"
   [ "$status" -eq 1 ]
   # Should show both -- options
   [[ "$output" == *"as -- zeke"* ]]
@@ -298,7 +297,7 @@ _make_task_map() {
   # 'test completions' exists but 'test' does NOT
   local map
   map=$(_make_task_map "mytool" "test completions" "test doctor" "install")
-  shiv_resolve_task "$map" "test" "completions"
+  shiv_resolve_task "mytool" "$map" "test" "completions"
   [ "$SHIV_RESOLVED_TASK" = "test:completions" ]
   [ ${#SHIV_RESOLVED_ARGS[@]} -eq 0 ]
 }
@@ -306,7 +305,7 @@ _make_task_map() {
 @test "resolve: single-word match with no children is not ambiguous" {
   local map
   map=$(_make_task_map "mytool" "install" "list" "doctor")
-  shiv_resolve_task "$map" "install" "some-arg"
+  shiv_resolve_task "mytool" "$map" "install" "some-arg"
   [ "$SHIV_RESOLVED_TASK" = "install" ]
   [ ${#SHIV_RESOLVED_ARGS[@]} -eq 1 ]
   [ "${SHIV_RESOLVED_ARGS[0]}" = "some-arg" ]
@@ -314,19 +313,22 @@ _make_task_map() {
 
 # --- Double-dash disambiguation ---
 
-@test "resolve: -- before args selects shorter task" {
+@test "resolve: -- passes through when unambiguous (selects shorter task)" {
+  # "as" is the only match for task_candidates=["as"] (before --).
+  # No ambiguity, so -- passes through to mise along with remaining args.
   local map
   map=$(_make_task_map "mytool" "as" "as zeke")
-  shiv_resolve_task "$map" "as" "--" "zeke"
+  shiv_resolve_task "mytool" "$map" "as" "--" "zeke"
   [ "$SHIV_RESOLVED_TASK" = "as" ]
-  [ ${#SHIV_RESOLVED_ARGS[@]} -eq 1 ]
-  [ "${SHIV_RESOLVED_ARGS[0]}" = "zeke" ]
+  [ ${#SHIV_RESOLVED_ARGS[@]} -eq 2 ]
+  [ "${SHIV_RESOLVED_ARGS[0]}" = "--" ]
+  [ "${SHIV_RESOLVED_ARGS[1]}" = "zeke" ]
 }
 
 @test "resolve: trailing -- selects full task path with no args" {
   local map
   map=$(_make_task_map "mytool" "as" "as zeke")
-  shiv_resolve_task "$map" "as" "zeke" "--"
+  shiv_resolve_task "mytool" "$map" "as" "zeke" "--"
   [ "$SHIV_RESOLVED_TASK" = "as:zeke" ]
   [ ${#SHIV_RESOLVED_ARGS[@]} -eq 0 ]
 }
@@ -334,7 +336,7 @@ _make_task_map() {
 @test "resolve: -- with multi-word task and remaining args" {
   local map
   map=$(_make_task_map "mytool" "agent message" "agent" "agent message send")
-  shiv_resolve_task "$map" "agent" "message" "--" "hello" "world"
+  shiv_resolve_task "mytool" "$map" "agent" "message" "--" "hello" "world"
   [ "$SHIV_RESOLVED_TASK" = "agent:message" ]
   [ ${#SHIV_RESOLVED_ARGS[@]} -eq 2 ]
   [ "${SHIV_RESOLVED_ARGS[0]}" = "hello" ]
@@ -344,14 +346,14 @@ _make_task_map() {
 @test "resolve: -- with nonexistent task returns exit 2" {
   local map
   map=$(_make_task_map "mytool" "install" "list")
-  run shiv_resolve_task "$map" "nonexistent" "--" "arg"
+  run shiv_resolve_task "mytool" "$map" "nonexistent" "--" "arg"
   [ "$status" -eq 2 ]
 }
 
 @test "resolve: bare -- with no task words returns exit 2" {
   local map
   map=$(_make_task_map "mytool" "install")
-  run shiv_resolve_task "$map" "--" "install"
+  run shiv_resolve_task "mytool" "$map" "--" "install"
   [ "$status" -eq 2 ]
 }
 
@@ -360,7 +362,7 @@ _make_task_map() {
 @test "resolve: exact match consuming all args (no remaining)" {
   local map
   map=$(_make_task_map "mytool" "dev test unit")
-  shiv_resolve_task "$map" "dev" "test" "unit"
+  shiv_resolve_task "mytool" "$map" "dev" "test" "unit"
   [ "$SHIV_RESOLVED_TASK" = "dev:test:unit" ]
   [ ${#SHIV_RESOLVED_ARGS[@]} -eq 0 ]
 }
@@ -369,14 +371,14 @@ _make_task_map() {
   local map
   map=$(_make_task_map "mytool" "agent message" "agent list")
   # 'agent' alone is not in the map, and 'agent foo' is not either
-  run shiv_resolve_task "$map" "agent" "foo"
+  run shiv_resolve_task "mytool" "$map" "agent" "foo"
   [ "$status" -eq 2 ]
 }
 
 @test "resolve: task map with single entry" {
   local map
   map=$(_make_task_map "mytool" "hello world")
-  shiv_resolve_task "$map" "hello" "world" "arg1"
+  shiv_resolve_task "mytool" "$map" "hello" "world" "arg1"
   [ "$SHIV_RESOLVED_TASK" = "hello:world" ]
   [ ${#SHIV_RESOLVED_ARGS[@]} -eq 1 ]
   [ "${SHIV_RESOLVED_ARGS[0]}" = "arg1" ]
@@ -385,7 +387,7 @@ _make_task_map() {
 @test "resolve: args with spaces are preserved in SHIV_RESOLVED_ARGS" {
   local map
   map=$(_make_task_map "mytool" "agent message")
-  shiv_resolve_task "$map" "agent" "message" "hello world" "foo"
+  shiv_resolve_task "mytool" "$map" "agent" "message" "hello world" "foo"
   [ "$SHIV_RESOLVED_TASK" = "agent:message" ]
   [ ${#SHIV_RESOLVED_ARGS[@]} -eq 2 ]
   [ "${SHIV_RESOLVED_ARGS[0]}" = "hello world" ]

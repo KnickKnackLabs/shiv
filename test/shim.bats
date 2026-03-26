@@ -177,6 +177,10 @@ TASK
 }
 
 # Helper: pre-populate the task map cache for a package.
+# This is called separately from `shiv install` so that unit tests exercise
+# resolution against a known task map without depending on the install hook's
+# cache generation (which requires mise + jq at install time). The integration
+# test "cache miss generates task map on the fly" covers that path.
 populate_task_map() {
   local name="$1" repo_dir="$2"
   mkdir -p "$SHIV_CACHE_DIR/tasks"

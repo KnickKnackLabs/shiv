@@ -70,8 +70,14 @@ _shiv_check_cwd() {
   fi
 }
 
+# NOTE: the mise tasks | jq pipeline below duplicates shiv_cache_task_map()
+# in lib/cache.sh (shim self-containment). If you change the format, update both.
 _shiv_ensure_task_map() {
   [ -f "\$SHIV_TASK_MAP" ] && return 0
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "$name: warning: jq not found, space-to-colon resolution disabled" >&2
+    return 0
+  fi
   mkdir -p "\$(dirname "\$SHIV_TASK_MAP")"
   local tmp="\$SHIV_TASK_MAP.tmp"
   mise tasks --json --hidden -C "\$REPO" 2>/dev/null \\
@@ -121,7 +127,8 @@ case "\${1:-}" in
     _shiv_handle_tasks "\$@"
     ;;
   *)
-    # Default task shortcut (single-command tools)
+    # Default task takes priority over space resolution — tools with a
+    # default task are single-command wrappers that pass all args through.
     if [ -n "\$DEFAULT_TASK" ] && [ -z "\${1:-}" ]; then
       exec mise -C "\$REPO" run -q "\$DEFAULT_TASK"
     elif [ -n "\$DEFAULT_TASK" ]; then
@@ -130,9 +137,11 @@ case "\${1:-}" in
 
     # Space-to-colon resolution
     _shiv_ensure_task_map
-    shiv_resolve_task "\$SHIV_TASK_MAP" "\$@"
+    shiv_resolve_task "$name" "\$SHIV_TASK_MAP" "\$@"
     _shiv_rc=\$?
     if [ "\$_shiv_rc" -eq 0 ]; then
+      # Guard: only expand SHIV_RESOLVED_ARGS when non-empty.
+      # bash <4.4 treats "${empty_array[@]}" as unbound under set -u.
       if [ \${#SHIV_RESOLVED_ARGS[@]} -gt 0 ]; then
         exec mise -C "\$REPO" run -q "\$SHIV_RESOLVED_TASK" "\${SHIV_RESOLVED_ARGS[@]}"
       else

@@ -29,6 +29,9 @@ shiv_cache_tasks() {
 #   agent:message  →  agent message
 #   dev:test:unit  →  dev test unit
 # Idempotent — safe to call from install, update, or shim (cache miss).
+#
+# NOTE: the mise tasks | jq pipeline is duplicated in _shiv_ensure_task_map()
+# in lib/shim.sh (shim self-containment). If you change the format, update both.
 shiv_cache_task_map() {
   [ "${SHIV_SKIP_CACHE:-}" = "1" ] && return 0
 
