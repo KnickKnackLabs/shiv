@@ -120,6 +120,7 @@ fi
 shiv_create_shim "$NAME" "$TOOL_PATH"
 SHIV_REF="$REF" shiv_register "$NAME" "$TOOL_PATH" "${ALIASES[@]}"
 shiv_cache_tasks "$NAME" "$TOOL_PATH"
+shiv_cache_task_map "$NAME" "$TOOL_PATH"
 
 # Create alias symlinks
 if [ ${#ALIASES[@]} -gt 0 ]; then

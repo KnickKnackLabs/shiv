@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+#MISE description="Run space-to-colon resolution tests (BATS)"
+set -e
+
+bats "$MISE_CONFIG_ROOT/test/resolve.bats"

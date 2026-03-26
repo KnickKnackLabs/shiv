@@ -126,3 +126,157 @@ TASK
   # Should NOT show the override hint
   [[ "$output" != *"override"* ]]
 }
+
+# ============================================================================
+# Space-to-colon resolution (integration)
+# ============================================================================
+
+# Helper: create a repo with nested tasks for resolution testing.
+# Creates: greet (echo GREET), greet:loud (echo GREET_LOUD),
+# and dev:test:unit (echoes args).
+create_resolve_repo() {
+  local name="$1"
+  local repo_dir="$TEST_HOME/repos/$name"
+
+  mkdir -p "$repo_dir/.mise/tasks/greet" "$repo_dir/.mise/tasks/dev/test"
+  git -C "$repo_dir" init -q -b main
+  git -C "$repo_dir" config user.email "test@test.com"
+  git -C "$repo_dir" config user.name "Test"
+
+  echo '[tools]' > "$repo_dir/mise.toml"
+
+  # greet — a task that is also a prefix of greet:loud
+  cat > "$repo_dir/.mise/tasks/greet/_default" <<'TASK'
+#!/usr/bin/env bash
+#MISE description="Say hello"
+echo "GREET $*"
+TASK
+  chmod +x "$repo_dir/.mise/tasks/greet/_default"
+
+  # greet:loud — child task
+  cat > "$repo_dir/.mise/tasks/greet/loud" <<'TASK'
+#!/usr/bin/env bash
+#MISE description="Say hello loudly"
+echo "GREET_LOUD $*"
+TASK
+  chmod +x "$repo_dir/.mise/tasks/greet/loud"
+
+  # dev:test:unit — deep nesting
+  cat > "$repo_dir/.mise/tasks/dev/test/unit" <<'TASK'
+#!/usr/bin/env bash
+#MISE description="Run unit tests"
+echo "DEV_TEST_UNIT $*"
+TASK
+  chmod +x "$repo_dir/.mise/tasks/dev/test/unit"
+
+  git -C "$repo_dir" add .
+  git -C "$repo_dir" commit -q -m "init"
+  mise trust "$repo_dir/mise.toml" 2>/dev/null
+
+  echo "$repo_dir"
+}
+
+# Helper: pre-populate the task map cache for a package.
+# This is called separately from `shiv install` so that unit tests exercise
+# resolution against a known task map without depending on the install hook's
+# cache generation (which requires mise + jq at install time). The integration
+# test "cache miss generates task map on the fly" covers that path.
+populate_task_map() {
+  local name="$1" repo_dir="$2"
+  mkdir -p "$SHIV_CACHE_DIR/tasks"
+  mise tasks --json --hidden -C "$repo_dir" 2>/dev/null \
+    | jq -r '.[].name | gsub(":"; " ")' > "$SHIV_CACHE_DIR/tasks/$name"
+}
+
+@test "shim: spaces resolve to colons end-to-end" {
+  local repo_dir
+  repo_dir=$(create_resolve_repo "mytool")
+  shiv install mytool "$repo_dir" 2>/dev/null
+  populate_task_map "mytool" "$repo_dir"
+
+  run "$SHIV_BIN_DIR/mytool" dev test unit
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"DEV_TEST_UNIT"* ]]
+}
+
+@test "shim: spaces resolve with remaining args passed through" {
+  local repo_dir
+  repo_dir=$(create_resolve_repo "mytool")
+  shiv install mytool "$repo_dir" 2>/dev/null
+  populate_task_map "mytool" "$repo_dir"
+
+  run "$SHIV_BIN_DIR/mytool" dev test unit myarg
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"DEV_TEST_UNIT myarg"* ]]
+}
+
+@test "shim: ambiguous input errors with guidance" {
+  local repo_dir
+  repo_dir=$(create_resolve_repo "mytool")
+  shiv install mytool "$repo_dir" 2>/dev/null
+  populate_task_map "mytool" "$repo_dir"
+
+  run "$SHIV_BIN_DIR/mytool" greet loud
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Ambiguous"* ]]
+  [[ "$output" == *"--"* ]]
+}
+
+@test "shim: -- selects parent task with args" {
+  local repo_dir
+  repo_dir=$(create_resolve_repo "mytool")
+  shiv install mytool "$repo_dir" 2>/dev/null
+  populate_task_map "mytool" "$repo_dir"
+
+  run "$SHIV_BIN_DIR/mytool" greet -- loud
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"GREET loud"* ]]
+}
+
+@test "shim: trailing -- selects child task with no args" {
+  local repo_dir
+  repo_dir=$(create_resolve_repo "mytool")
+  shiv install mytool "$repo_dir" 2>/dev/null
+  populate_task_map "mytool" "$repo_dir"
+
+  run "$SHIV_BIN_DIR/mytool" greet loud --
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"GREET_LOUD"* ]]
+  [[ "$output" == "GREET_LOUD " ]] || [[ "$output" == "GREET_LOUD" ]]
+}
+
+@test "shim: cache miss generates task map on the fly" {
+  local repo_dir
+  repo_dir=$(create_resolve_repo "mytool")
+  shiv install mytool "$repo_dir" 2>/dev/null
+
+  [ ! -f "$SHIV_CACHE_DIR/tasks/mytool" ]
+
+  # The shim uses XDG_CACHE_HOME (not SHIV_CACHE_DIR) for task maps.
+  run env -u SHIV_SKIP_CACHE XDG_CACHE_HOME="$TEST_HOME/.cache" "$SHIV_BIN_DIR/mytool" dev test unit
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"DEV_TEST_UNIT"* ]]
+
+  [ -f "$SHIV_CACHE_DIR/tasks/mytool" ]
+}
+
+@test "shim: unresolved input falls through to mise" {
+  local repo_dir
+  repo_dir=$(create_resolve_repo "mytool")
+  shiv install mytool "$repo_dir" 2>/dev/null
+  populate_task_map "mytool" "$repo_dir"
+
+  run "$SHIV_BIN_DIR/mytool" nonexistent-thing
+  [ "$status" -ne 0 ]
+}
+
+@test "shim: colons still work (backward compatible)" {
+  local repo_dir
+  repo_dir=$(create_resolve_repo "mytool")
+  shiv install mytool "$repo_dir" 2>/dev/null
+  populate_task_map "mytool" "$repo_dir"
+
+  run "$SHIV_BIN_DIR/mytool" dev:test:unit
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"DEV_TEST_UNIT"* ]]
+}

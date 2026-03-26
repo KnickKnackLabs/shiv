@@ -101,6 +101,7 @@ update_one() {
   fi
 
   shiv_cache_tasks "$name" "$repo"
+  shiv_cache_task_map "$name" "$repo"
 
   # Recreate alias symlinks
   aliases=()

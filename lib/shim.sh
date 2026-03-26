@@ -8,6 +8,7 @@ REPO_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 source "$REPO_LIB_DIR/registry.sh"
 source "$REPO_LIB_DIR/cache.sh"
+source "$REPO_LIB_DIR/resolve.sh"
 source "$REPO_LIB_DIR/sources.sh"
 
 SHIV_BIN_DIR="${SHIV_BIN_DIR:-$HOME/.local/bin}"
@@ -36,49 +37,125 @@ shiv_create_shim() {
   fi
 
   mkdir -p "$SHIV_BIN_DIR"
+
+  # Build the shim in three parts:
+  # 1. Header + config (expanded heredoc — bakes in install-time values)
+  # 2. Embedded resolver (quoted heredoc — no expansion, verbatim from lib/resolve.sh)
+  # 3. Runtime logic (expanded heredoc — references both baked config and runtime vars)
+
+  # Part 1: shebang, config, and helper functions
   cat > "$SHIV_BIN_DIR/$name" <<SCRIPT
 #!/usr/bin/env bash
 # managed by shiv
 REPO="$repo_dir"
 DEFAULT_TASK="${default_task}"
 HAS_TASKS_TASK="${has_tasks_task}"
-if [ ! -d "\$REPO" ]; then
-  echo "$name: repo not found at \$REPO" >&2
-  echo "$name: run 'shiv doctor' to diagnose" >&2
-  exit 1
-fi
-export CALLER_PWD="\$PWD"
-if [ "\$(basename "\$PWD")" = "$name" ] && [ "\$PWD" != "$repo_dir" ]; then
-  echo "$name: warning: you're in a directory called '$name' but running the shiv-installed copy" >&2
-  echo "$name: shiv package: $repo_dir" >&2
-  echo "$name: current dir: \$PWD" >&2
-  echo "$name: to run from this directory instead: mise run \$*" >&2
+SHIV_TASK_MAP="\${XDG_CACHE_HOME:-\$HOME/.cache}/shiv/tasks/$name"
+
+_shiv_check_repo() {
+  if [ ! -d "\$REPO" ]; then
+    echo "$name: repo not found at \$REPO" >&2
+    echo "$name: run 'shiv doctor' to diagnose" >&2
+    exit 1
+  fi
+}
+
+_shiv_check_cwd() {
+  if [ "\$(basename "\$PWD")" = "$name" ] && [ "\$PWD" != "$repo_dir" ]; then
+    echo "$name: warning: you're in a directory called '$name' but running the shiv-installed copy" >&2
+    echo "$name: shiv package: $repo_dir" >&2
+    echo "$name: current dir: \$PWD" >&2
+    echo "$name: to run from this directory instead: mise run \$*" >&2
+    echo "" >&2
+  fi
+}
+
+# NOTE: the mise tasks | jq pipeline below duplicates shiv_cache_task_map()
+# in lib/cache.sh (shim self-containment). If you change the format, update both.
+_shiv_ensure_task_map() {
+  [ -f "\$SHIV_TASK_MAP" ] && return 0
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "$name: warning: jq not found, space-to-colon resolution disabled" >&2
+    return 0
+  fi
+  mkdir -p "\$(dirname "\$SHIV_TASK_MAP")"
+  local tmp="\$SHIV_TASK_MAP.tmp"
+  mise tasks --json --hidden -C "\$REPO" 2>/dev/null \\
+    | jq -r '.[].name | gsub(":"; " ")' > "\$tmp" 2>/dev/null || true
+  if [ -s "\$tmp" ]; then
+    mv "\$tmp" "\$SHIV_TASK_MAP"
+  else
+    rm -f "\$tmp"
+  fi
+}
+
+_shiv_handle_tasks() {
+  if [ "\$HAS_TASKS_TASK" = "true" ]; then
+    exec mise -C "\$REPO" run -q "\$@"
+  fi
+  mise -C "\$REPO" tasks
+  local rc=\$?
   echo "" >&2
-fi
+  echo "To override this output, create .mise/tasks/tasks in the package and reinstall." >&2
+  exit \$rc
+}
+
+SCRIPT
+
+  # Part 2: embed resolver function (quoted heredoc — no variable expansion)
+  cat >> "$SHIV_BIN_DIR/$name" <<'RESOLVE'
+# --- embedded from lib/resolve.sh ---
+RESOLVE
+  # Strip the shebang line and inject the function body
+  sed '1{/^#!/d;}' "$REPO_LIB_DIR/resolve.sh" >> "$SHIV_BIN_DIR/$name"
+  echo '# --- end embedded resolver ---' >> "$SHIV_BIN_DIR/$name"
+  echo '' >> "$SHIV_BIN_DIR/$name"
+
+  # Part 3: main dispatch logic
+  cat >> "$SHIV_BIN_DIR/$name" <<SCRIPT
+
+# --- main ---
+_shiv_check_repo
+export CALLER_PWD="\$PWD"
+_shiv_check_cwd
+
 case "\${1:-}" in
   --help|-h|help)
     exec mise -C "\$REPO" tasks
     ;;
   tasks)
-    if [ "\$HAS_TASKS_TASK" = "true" ]; then
-      exec mise -C "\$REPO" run -q "\$@"
-    fi
-    mise -C "\$REPO" tasks
-    rc=\$?
-    echo "" >&2
-    echo "To override this output, create .mise/tasks/tasks in the package and reinstall." >&2
-    exit \$rc
+    _shiv_handle_tasks "\$@"
     ;;
   *)
+    # Default task takes priority over space resolution — tools with a
+    # default task are single-command wrappers that pass all args through.
     if [ -n "\$DEFAULT_TASK" ] && [ -z "\${1:-}" ]; then
       exec mise -C "\$REPO" run -q "\$DEFAULT_TASK"
     elif [ -n "\$DEFAULT_TASK" ]; then
       exec mise -C "\$REPO" run -q "\$DEFAULT_TASK" "\$@"
     fi
+
+    # Space-to-colon resolution
+    _shiv_ensure_task_map
+    shiv_resolve_task "$name" "\$SHIV_TASK_MAP" "\$@"
+    _shiv_rc=\$?
+    if [ "\$_shiv_rc" -eq 0 ]; then
+      # Guard: only expand SHIV_RESOLVED_ARGS when non-empty.
+      # bash <4.4 treats "${empty_array[@]}" as unbound under set -u.
+      if [ \${#SHIV_RESOLVED_ARGS[@]} -gt 0 ]; then
+        exec mise -C "\$REPO" run -q "\$SHIV_RESOLVED_TASK" "\${SHIV_RESOLVED_ARGS[@]}"
+      else
+        exec mise -C "\$REPO" run -q "\$SHIV_RESOLVED_TASK"
+      fi
+    elif [ "\$_shiv_rc" -eq 1 ]; then
+      exit 1  # ambiguous — error already printed to stderr
+    fi
+    # rc=2 or no task map: fall through to mise
     exec mise -C "\$REPO" run -q "\$@"
     ;;
 esac
 SCRIPT
+
   chmod +x "$SHIV_BIN_DIR/$name"
 }
 
