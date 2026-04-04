@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+#MISE description="Set up dev environment (hooks, tools)"
+set -euo pipefail
+
+echo "Setting up $(basename "$MISE_CONFIG_ROOT")..."
+
+# Install codebase via shiv directly (not vfox-shiv) to avoid circular dependency:
+# shiv can't depend on vfox-shiv to install its own packages.
+if command -v shiv &>/dev/null; then
+  shiv install codebase 2>/dev/null || true
+fi
+
+if command -v codebase &>/dev/null; then
+  cd "$MISE_CONFIG_ROOT" && codebase pre-commit
+else
+  echo "WARN: codebase not found — install shiv first, then run 'shiv install codebase'" >&2
+fi
+
+echo "Done."
