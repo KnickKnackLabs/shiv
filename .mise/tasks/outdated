@@ -1,0 +1,146 @@
+#!/usr/bin/env bash
+#MISE description="Check for newer versions of installed packages"
+#USAGE arg "[names...]" help="Packages to check (default: all)"
+set -eo pipefail
+
+source "$MISE_CONFIG_ROOT/lib/shim.sh"
+
+shiv_init_registry
+
+SEP='|'
+NAMES=()
+
+# Parse positional args
+if [ -n "${usage_names:-}" ]; then
+  IFS=' ' read -ra NAMES <<< "$usage_names"
+fi
+
+# If no args, check all registered packages
+if [ ${#NAMES[@]} -eq 0 ]; then
+  while IFS=$'\t' read -r name _path _ref; do
+    NAMES+=("$name")
+  done < <(shiv_registry_entries)
+fi
+
+if [ ${#NAMES[@]} -eq 0 ]; then
+  echo "No packages registered. Use 'shiv install <name>' to add one."
+  exit 0
+fi
+
+# Get the latest semver tag from remote tags output (git ls-remote --tags)
+# Expects lines like: <sha>\trefs/tags/v1.2.3
+# Filters out ^{} derefs, strips refs/tags/, sorts by semver, picks last
+latest_remote_tag() {
+  local tags_output="$1"
+  echo "$tags_output" \
+    | grep -v '\^{}' \
+    | sed 's|.*refs/tags/||' \
+    | grep -E '^v?[0-9]+\.[0-9]+' \
+    | sort -t. -k1,1n -k2,2n -k3,3n \
+    | tail -1
+}
+
+# Get the latest tag from a local repo (semver sort)
+latest_local_tag() {
+  local repo="$1"
+  git -C "$repo" tag -l 2>/dev/null \
+    | grep -E '^v?[0-9]+\.[0-9]+' \
+    | sort -t. -k1,1n -k2,2n -k3,3n \
+    | tail -1
+}
+
+ROWS=()
+HAS_OUTDATED=false
+
+for name in "${NAMES[@]}"; do
+  repo=$(shiv_registry_path "$name")
+
+  # Try resolving as alias
+  if [ -z "$repo" ]; then
+    resolved=$(shiv_registry_resolve "$name")
+    if [ -n "$resolved" ]; then
+      name="$resolved"
+      repo=$(shiv_registry_path "$name")
+    fi
+  fi
+
+  if [ -z "$repo" ]; then
+    ROWS+=("${name}${SEP}-${SEP}-${SEP}✗ not registered")
+    continue
+  fi
+
+  if [ ! -d "$repo" ]; then
+    ROWS+=("${name}${SEP}-${SEP}-${SEP}✗ repo missing")
+    continue
+  fi
+
+  if [ ! -d "$repo/.git" ]; then
+    ROWS+=("${name}${SEP}-${SEP}-${SEP}· not a git repo")
+    continue
+  fi
+
+  # Current version: tag if on one, otherwise short hash
+  current_tag=$(git -C "$repo" describe --tags --exact-match HEAD 2>/dev/null || echo "")
+  current_hash=$(git -C "$repo" rev-parse --short HEAD 2>/dev/null || echo "?")
+  current="${current_tag:-$current_hash}"
+
+  # Get remote URL
+  remote_url=$(git -C "$repo" remote get-url origin 2>/dev/null || echo "")
+  if [ -z "$remote_url" ]; then
+    ROWS+=("${name}${SEP}${current}${SEP}-${SEP}· no remote")
+    continue
+  fi
+
+  # Fetch remote tags
+  tags_output=$(git ls-remote --tags "$remote_url" 2>/dev/null || echo "")
+
+  if [ -z "$tags_output" ]; then
+    # No remote tags — compare HEAD against remote HEAD
+    remote_head=$(git ls-remote "$remote_url" HEAD 2>/dev/null | awk '{print $1}' | head -c7)
+    if [ -z "$remote_head" ]; then
+      ROWS+=("${name}${SEP}${current}${SEP}-${SEP}· can't reach remote")
+      continue
+    fi
+
+    local_head=$(git -C "$repo" rev-parse HEAD 2>/dev/null || echo "")
+    if [ "${local_head:0:7}" = "$remote_head" ]; then
+      ROWS+=("${name}${SEP}${current}${SEP}${current}${SEP}✓ up to date")
+    else
+      HAS_OUTDATED=true
+      ROWS+=("${name}${SEP}${current}${SEP}${remote_head}${SEP}⚠ behind remote")
+    fi
+    continue
+  fi
+
+  latest=$(latest_remote_tag "$tags_output")
+  if [ -z "$latest" ]; then
+    # Remote has tags but none look like semver
+    ROWS+=("${name}${SEP}${current}${SEP}-${SEP}· no semver tags")
+    continue
+  fi
+
+  if [ -n "$current_tag" ] && [ "$current_tag" = "$latest" ]; then
+    ROWS+=("${name}${SEP}${current}${SEP}${latest}${SEP}✓ up to date")
+  elif [ -n "$current_tag" ]; then
+    HAS_OUTDATED=true
+    ROWS+=("${name}${SEP}${current}${SEP}${latest}${SEP}⚠ outdated")
+  else
+    # On a branch, not a tag — check if latest tag is ahead
+    local_latest=$(latest_local_tag "$repo")
+    if [ "$local_latest" = "$latest" ]; then
+      ROWS+=("${name}${SEP}${current}${SEP}${latest}${SEP}✓ latest tag present")
+    else
+      HAS_OUTDATED=true
+      ROWS+=("${name}${SEP}${current}${SEP}${latest}${SEP}⚠ newer tag available")
+    fi
+  fi
+done
+
+echo ""
+printf '%s\n' "${ROWS[@]}" | gum table -s "$SEP" -c "PACKAGE,CURRENT,LATEST,STATUS" -p --border normal
+
+if [ "$HAS_OUTDATED" = "true" ]; then
+  echo ""
+  gum style --faint "  Run 'shiv install <name>@<version>' to update a pinned package."
+  exit 1
+fi
