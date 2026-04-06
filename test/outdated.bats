@@ -273,6 +273,16 @@ create_local_package() {
   echo "$output" | grep -q "⚠ outdated"
 }
 
+@test "outdated: v-prefixed tags with major version > 9 sort correctly" {
+  remote_dir=$(create_remote "alpha" "v1.0.0" "v2.0.0" "v10.0.0")
+  create_package_from_remote "alpha" "$remote_dir" "v2.0.0"
+
+  run shiv outdated
+  [ "$status" -eq 1 ]
+  echo "$output" | grep -q "v10.0.0"
+  echo "$output" | grep -q "⚠ outdated"
+}
+
 # ============================================================================
 # Exit codes
 # ============================================================================
