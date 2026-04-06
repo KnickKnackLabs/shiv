@@ -6,3 +6,9 @@ task_output = "interleave"
 bats = "1.13.0"
 gum = "0.17.0"
 jsonschema = "14.14.2"
+
+[_.codebase]
+lint = ["mise-settings", "gum-table"]
+
+[_.codebase.scope]
+gum-table = ".mise/tasks"
