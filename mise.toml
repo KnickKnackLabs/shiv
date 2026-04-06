@@ -2,10 +2,14 @@
 quiet = true
 task_output = "interleave"
 
+[plugins]
+shiv = "https://github.com/KnickKnackLabs/vfox-shiv"
+
 [tools]
 bats = "1.13.0"
 gum = "0.17.0"
 jsonschema = "14.14.2"
+"shiv:codebase" = "0.1.0"
 
 [_.codebase]
 lint = ["mise-settings", "gum-table"]
