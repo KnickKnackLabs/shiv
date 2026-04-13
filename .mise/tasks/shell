@@ -25,11 +25,8 @@ if [ -z "$EXISTING_SHIV" ]; then
   shiv_cache_tasks "shiv" "$SHIV_CANONICAL"
 fi
 
-# Ensure ~/.local/bin is on PATH (skip if already there)
-case ":$PATH:" in
-  *":$SHIV_BIN_DIR:"*) ;;
-  *) echo "export PATH=\"$SHIV_BIN_DIR:\$PATH\"" ;;
-esac
+# Emit PATH exports for shiv bin dir and mise shims
+shiv_emit_path_exports
 
 # Export SHIV_SOURCES if sources directory has files
 if [ -n "$SHIV_SOURCES" ]; then
