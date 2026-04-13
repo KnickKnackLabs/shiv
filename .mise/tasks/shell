@@ -25,23 +25,8 @@ if [ -z "$EXISTING_SHIV" ]; then
   shiv_cache_tasks "shiv" "$SHIV_CANONICAL"
 fi
 
-# Ensure ~/.local/bin is on PATH (skip if already there)
-case ":$PATH:" in
-  *":$SHIV_BIN_DIR:"*) ;;
-  *) echo "export PATH=\"$SHIV_BIN_DIR:\$PATH\"" ;;
-esac
-
-# Ensure mise shims are on PATH so shiv packages installed via vfox-shiv
-# resolve correctly in non-interactive shells (agent sessions, scripts, etc.).
-# Emitted after SHIV_BIN_DIR so shims end up earlier on PATH — when a
-# directory's mise.toml pins a version, the mise shim wins over the global shiv shim.
-MISE_SHIMS_DIR="${MISE_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/mise}/shims"
-if [ -d "$MISE_SHIMS_DIR" ]; then
-  case ":$PATH:" in
-    *":$MISE_SHIMS_DIR:"*) ;;
-    *) echo "export PATH=\"$MISE_SHIMS_DIR:\$PATH\"" ;;
-  esac
-fi
+# Emit PATH exports for shiv bin dir and mise shims
+shiv_emit_path_exports
 
 # Export SHIV_SOURCES if sources directory has files
 if [ -n "$SHIV_SOURCES" ]; then

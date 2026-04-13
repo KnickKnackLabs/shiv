@@ -1,9 +1,5 @@
 #!/usr/bin/env bats
 # shiv shell task tests — PATH setup for shiv + mise shims
-#
-# Tests the PATH-emitting logic from the shell task directly,
-# without running through `mise run` (which requires trust/install
-# of the full global config and is slow in test).
 
 REPO_DIR="$BATS_TEST_DIRNAME/.."
 load helpers
@@ -30,29 +26,6 @@ teardown() {
   rm -rf "$TEST_HOME"
 }
 
-# Helper: run just the PATH-emitting logic from the shell task.
-# This avoids needing mise trust/install for the global config.
-run_shell_path_logic() {
-  bash -c '
-    source "'"$REPO_DIR"'/lib/shim.sh"
-
-    # Ensure ~/.local/bin is on PATH (skip if already there)
-    case ":$PATH:" in
-      *":$SHIV_BIN_DIR:"*) ;;
-      *) echo "export PATH=\"$SHIV_BIN_DIR:\$PATH\"" ;;
-    esac
-
-    # Ensure mise shims are on PATH
-    MISE_SHIMS_DIR="${MISE_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/mise}/shims"
-    if [ -d "$MISE_SHIMS_DIR" ]; then
-      case ":$PATH:" in
-        *":$MISE_SHIMS_DIR:"*) ;;
-        *) echo "export PATH=\"$MISE_SHIMS_DIR:\$PATH\"" ;;
-      esac
-    fi
-  '
-}
-
 # ============================================================================
 # SHIV_BIN_DIR on PATH
 # ============================================================================
@@ -60,7 +33,7 @@ run_shell_path_logic() {
 @test "shell: adds SHIV_BIN_DIR to PATH when not present" {
   export PATH="${PATH//$SHIV_BIN_DIR:/}"
 
-  run run_shell_path_logic
+  run shiv_emit_path_exports
   [ "$status" -eq 0 ]
   [[ "$output" == *"export PATH=\"$SHIV_BIN_DIR:"* ]]
 }
@@ -68,7 +41,7 @@ run_shell_path_logic() {
 @test "shell: skips SHIV_BIN_DIR when already on PATH" {
   export PATH="$SHIV_BIN_DIR:$PATH"
 
-  run run_shell_path_logic
+  run shiv_emit_path_exports
   [ "$status" -eq 0 ]
   [[ "$output" != *"export PATH=\"$SHIV_BIN_DIR:"* ]]
 }
@@ -82,7 +55,7 @@ run_shell_path_logic() {
   mkdir -p "$shims_dir"
   export PATH="${PATH//$shims_dir:/}"
 
-  run run_shell_path_logic
+  run shiv_emit_path_exports
   [ "$status" -eq 0 ]
   [[ "$output" == *"export PATH=\"$shims_dir:"* ]]
 }
@@ -92,13 +65,13 @@ run_shell_path_logic() {
   mkdir -p "$shims_dir"
   export PATH="$shims_dir:$PATH"
 
-  run run_shell_path_logic
+  run shiv_emit_path_exports
   [ "$status" -eq 0 ]
   [[ "$output" != *"export PATH=\"$shims_dir:"* ]]
 }
 
 @test "shell: skips mise shims dir when it does not exist" {
-  run run_shell_path_logic
+  run shiv_emit_path_exports
   [ "$status" -eq 0 ]
   [[ "$output" != *"mise/shims"* ]]
 }
@@ -109,10 +82,9 @@ run_shell_path_logic() {
   export PATH="${PATH//$SHIV_BIN_DIR:/}"
   export PATH="${PATH//$shims_dir:/}"
 
-  run run_shell_path_logic
+  run shiv_emit_path_exports
   [ "$status" -eq 0 ]
 
-  # Both should be present
   [[ "$output" == *"$SHIV_BIN_DIR"* ]]
   [[ "$output" == *"$shims_dir"* ]]
 
@@ -130,7 +102,7 @@ run_shell_path_logic() {
   mkdir -p "$shims_dir"
   export MISE_DATA_DIR="$custom_mise"
 
-  run run_shell_path_logic
+  run shiv_emit_path_exports
   [ "$status" -eq 0 ]
   [[ "$output" == *"export PATH=\"$shims_dir:"* ]]
 }
@@ -142,7 +114,7 @@ run_shell_path_logic() {
   export XDG_DATA_HOME="$xdg_data"
   unset MISE_DATA_DIR
 
-  run run_shell_path_logic
+  run shiv_emit_path_exports
   [ "$status" -eq 0 ]
   [[ "$output" == *"export PATH=\"$shims_dir:"* ]]
 }
@@ -157,8 +129,7 @@ run_shell_path_logic() {
   export PATH="${PATH//$SHIV_BIN_DIR:/}"
   export PATH="${PATH//$shims_dir:/}"
 
-  # Eval the output and check resulting PATH
-  eval "$(run_shell_path_logic)"
+  eval "$(shiv_emit_path_exports)"
 
   # mise shims should come before SHIV_BIN_DIR
   local shims_pos bin_pos

@@ -169,6 +169,29 @@ shiv_create_alias_symlinks() {
   done
 }
 
+# Emit shell export statements to put shiv's bin dir and mise's shims dir on PATH.
+# Designed to be eval'd: `eval "$(shiv_emit_path_exports)"`
+# Mise shims are emitted after SHIV_BIN_DIR so they end up first on PATH —
+# when a directory's mise.toml pins a version, the mise shim wins over the
+# global shiv shim.
+shiv_emit_path_exports() {
+  # Ensure SHIV_BIN_DIR (~/.local/bin) is on PATH
+  case ":$PATH:" in
+    *":$SHIV_BIN_DIR:"*) ;;
+    *) echo "export PATH=\"$SHIV_BIN_DIR:\$PATH\"" ;;
+  esac
+
+  # Ensure mise shims are on PATH so shiv packages installed via vfox-shiv
+  # resolve correctly in non-interactive shells (agent sessions, scripts, etc.).
+  local mise_shims_dir="${MISE_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/mise}/shims"
+  if [ -d "$mise_shims_dir" ]; then
+    case ":$PATH:" in
+      *":$mise_shims_dir:"*) ;;
+      *) echo "export PATH=\"$mise_shims_dir:\$PATH\"" ;;
+    esac
+  fi
+}
+
 # Remove alias symlinks for a package (only if they point to the expected target)
 shiv_remove_alias_symlinks() {
   local name="$1"
