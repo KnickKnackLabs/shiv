@@ -5,6 +5,10 @@
 #USAGE flag "--as <alias>" var=#true help="Command alias(es) — creates symlinks to the package shim"
 set -eo pipefail
 
+# shiv packages live on github.com. Pin GH_HOST so `gh repo clone` doesn't
+# resolve against a GHE instance when the user's default host is corporate.
+export GH_HOST=github.com
+
 REPO_DIR="$MISE_CONFIG_ROOT"
 source "$REPO_DIR/lib/shim.sh"
 
