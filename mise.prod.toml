@@ -1,0 +1,6 @@
+# Runtime-only tools — used by consumers (e.g., vfox-shiv bootstrap).
+# Dev/test tools (bats, jsonschema) stay in mise.toml.
+# Usage: MISE_ENV=prod mise install
+
+[tools]
+gum = "0.17.0"
