@@ -114,9 +114,9 @@ else
 
   # Set up dependencies
   printf -v escaped_path '%q' "$TOOL_PATH"
-  dep_output=$(bash -c "cd $escaped_path && mise trust -q 2>/dev/null; mise install -q 2>&1") || {
+  dep_output=$(gum spin --title "  Setting up dependencies..." -- bash -c "cd $escaped_path && mise trust -q 2>&1 && mise install -q 2>&1") || {
     echo "  ✗ Failed to install dependencies for $NAME" >&2
-    echo "$dep_output" | sed 's/^/    /' >&2
+    echo "$dep_output" | sed $'s/\x1b\\[[0-9;]*m//g' | sed 's/^/    /' >&2
     exit 1
   }
 fi
