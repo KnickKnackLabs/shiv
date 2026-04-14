@@ -35,3 +35,9 @@ setup() {
   result=$(echo "$input" | strip_ansi)
   [ "$result" = "helloworld" ]
 }
+
+@test "strip_ansi removes terminal mode sequences" {
+  input=$'\e[?25l\e[?2004hvisible text\e[?25h\e[?2004l'
+  result=$(echo "$input" | strip_ansi)
+  [ "$result" = "visible text" ]
+}
