@@ -1,21 +1,35 @@
 #!/usr/bin/env bash
-#MISE description="Run test suite"
-#USAGE arg "[name]" help="Test file to run (e.g. 'list' for test/list.bats). Runs all if omitted."
-set -eo pipefail
+#MISE description="Run BATS tests"
+#USAGE arg "[args]..." var=#true help="Test suites or bats arguments"
+#USAGE example "mise run test" header="Run all tests"
+#USAGE example "mise run test doctor" header="Run a specific suite by name"
+#USAGE example "mise run test test/format.bats" header="Run a specific file"
+#USAGE example "mise run test -- --filter rejects" header="Filter tests by name"
+set -euo pipefail
 
-REPO_DIR="$MISE_CONFIG_ROOT"
+TEST_DIR="$MISE_CONFIG_ROOT/test"
 
-# Completions excluded — requires fish/zsh, has its own workflow
+# Completions excluded from default run — requires fish/zsh, has its own workflow
 EXCLUDE="completions"
 
-if [[ -n "${usage_name:-}" ]]; then
-  bats "$REPO_DIR/test/${usage_name}.bats"
-else
-  files=()
-  for f in "$REPO_DIR"/test/*.bats; do
-    name="$(basename "$f" .bats)"
-    [[ "$name" == "$EXCLUDE" ]] && continue
-    files+=("$f")
+args=()
+has_target=false
+
+for arg in "$@"; do
+  if [[ "$arg" != -* && "$arg" != *.bats && -f "$TEST_DIR/$arg.bats" ]]; then
+    args+=("$TEST_DIR/$arg.bats")
+    has_target=true
+  else
+    [[ "$arg" == *.bats || -d "$arg" ]] && has_target=true
+    args+=("$arg")
+  fi
+done
+
+if ! $has_target; then
+  for f in "$TEST_DIR"/*.bats; do
+    [[ "$(basename "$f" .bats)" == "$EXCLUDE" ]] && continue
+    args+=("$f")
   done
-  bats "${files[@]}"
 fi
+
+bats "${args[@]}"
