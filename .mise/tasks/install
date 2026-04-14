@@ -114,7 +114,11 @@ else
 
   # Set up dependencies
   printf -v escaped_path '%q' "$TOOL_PATH"
-  gum spin --title "  Setting up dependencies..." -- bash -c "cd $escaped_path && mise trust -q 2>/dev/null; mise install -q 2>/dev/null || true"
+  dep_output=$(bash -c "cd $escaped_path && mise trust -q 2>/dev/null; mise install -q 2>&1") || {
+    echo "  ✗ Failed to install dependencies for $NAME" >&2
+    echo "$dep_output" | sed 's/^/    /' >&2
+    exit 1
+  }
 fi
 
 if [ ! -f "$TOOL_PATH/mise.toml" ]; then
