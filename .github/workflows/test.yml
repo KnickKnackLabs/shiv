@@ -1,0 +1,43 @@
+name: Test
+
+on:
+  pull_request:
+    paths:
+      - lib/**
+      - test/**
+      - .mise/tasks/**
+      - mise.toml
+  push:
+    branches: [main]
+    paths:
+      - lib/**
+      - test/**
+      - .mise/tasks/**
+      - mise.toml
+  schedule:
+    - cron: "0 9 * * 1"
+  workflow_dispatch:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install mise
+        run: |
+          curl -fsSL https://mise.run | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install tools
+        run: |
+          mise trust
+          mise install bats
+
+      - name: Run tests
+        run: mise run test

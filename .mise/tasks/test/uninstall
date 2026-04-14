@@ -1,5 +1,0 @@
-#!/usr/bin/env bash
-#MISE description="Run uninstall tests (BATS)"
-set -e
-
-bats "$MISE_CONFIG_ROOT/test/uninstall.bats"

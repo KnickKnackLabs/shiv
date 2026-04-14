@@ -1,5 +1,0 @@
-#!/usr/bin/env bash
-#MISE description="Run doctor tests (BATS)"
-set -e
-
-bats "$MISE_CONFIG_ROOT/test/doctor.bats"
