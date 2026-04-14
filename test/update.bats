@@ -65,11 +65,6 @@ push_remote_commit() {
   rm -rf "$tmp_dir"
 }
 
-# Helper: portable file modification time (seconds since epoch)
-file_mtime() {
-  stat -f %m "$1" 2>/dev/null || stat -c %Y "$1"
-}
-
 # Helper: run shiv update through the mock shim
 run_update() {
   local name="${1:-}"
@@ -174,9 +169,9 @@ extract_column() {
   shiv_register "alpha" "$SHIV_PACKAGES_DIR/alpha"
   shiv_create_shim "alpha" "$SHIV_PACKAGES_DIR/alpha"
 
-  # Record shim modification time
-  local before_mtime
-  before_mtime=$(file_mtime "$SHIV_BIN_DIR/alpha")
+  # Record shim content hash
+  local before_hash
+  before_hash=$(shasum "$SHIV_BIN_DIR/alpha" | cut -d' ' -f1)
 
   # Push a commit to remote and diverge locally
   push_remote_commit "alpha"
@@ -186,14 +181,11 @@ extract_column() {
   git -C "$SHIV_PACKAGES_DIR/alpha" add .
   git -C "$SHIV_PACKAGES_DIR/alpha" commit -q -m "diverge"
 
-  # Small delay so mtime would differ if shim were touched
-  sleep 1
-
   run run_update "alpha"
 
-  local after_mtime
-  after_mtime=$(file_mtime "$SHIV_BIN_DIR/alpha")
-  [ "$before_mtime" = "$after_mtime" ]
+  local after_hash
+  after_hash=$(shasum "$SHIV_BIN_DIR/alpha" | cut -d' ' -f1)
+  [ "$before_hash" = "$after_hash" ]
 }
 
 # ============================================================================

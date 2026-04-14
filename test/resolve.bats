@@ -43,8 +43,7 @@ teardown() {
   shiv_cache_task_map "shiv" "$REPO_DIR"
   grep -q "^install$" "$SHIV_CACHE_DIR/tasks/shiv"
   grep -q "^list$" "$SHIV_CACHE_DIR/tasks/shiv"
-  grep -q "^test completions$" "$SHIV_CACHE_DIR/tasks/shiv"
-  grep -q "^test doctor$" "$SHIV_CACHE_DIR/tasks/shiv"
+  grep -q "^test$" "$SHIV_CACHE_DIR/tasks/shiv"
 }
 
 @test "task-map: cache format is one space-separated task path per line" {
