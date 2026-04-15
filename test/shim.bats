@@ -280,3 +280,142 @@ populate_task_map() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"DEV_TEST_UNIT"* ]]
 }
+
+# ============================================================================
+# Default task + subtask ambiguity (shiv#94)
+# ============================================================================
+
+# Helper: create a repo with _default (interactive menu) + named subtasks.
+# Mimics the pattern from KnickKnackLabs/ask.
+create_default_plus_subtasks_repo() {
+  local name="$1"
+  local repo_dir="$TEST_HOME/repos/$name"
+
+  mkdir -p "$repo_dir/.mise/tasks"
+  git -C "$repo_dir" init -q -b main
+  git -C "$repo_dir" config user.email "test@test.com"
+  git -C "$repo_dir" config user.name "Test"
+
+  echo '[tools]' > "$repo_dir/mise.toml"
+
+  # _default — interactive menu / catch-all
+  cat > "$repo_dir/.mise/tasks/_default" <<'TASK'
+#!/usr/bin/env bash
+#MISE description="Interactive menu"
+echo "DEFAULT $*"
+TASK
+  chmod +x "$repo_dir/.mise/tasks/_default"
+
+  # question — named subtask (alias: q)
+  cat > "$repo_dir/.mise/tasks/question" <<'TASK'
+#!/usr/bin/env bash
+#MISE description="Ask a question"
+#MISE alias="q"
+echo "QUESTION $*"
+TASK
+  chmod +x "$repo_dir/.mise/tasks/question"
+
+  # info — another named subtask
+  cat > "$repo_dir/.mise/tasks/info" <<'TASK'
+#!/usr/bin/env bash
+#MISE description="Show info"
+echo "INFO $*"
+TASK
+  chmod +x "$repo_dir/.mise/tasks/info"
+
+  git -C "$repo_dir" add .
+  git -C "$repo_dir" commit -q -m "init"
+  mise trust "$repo_dir/mise.toml" 2>/dev/null
+
+  echo "$repo_dir"
+}
+
+@test "shim: _default runs with no args" {
+  local repo_dir
+  repo_dir=$(create_default_plus_subtasks_repo "asktool")
+  shiv install asktool "$repo_dir" 2>/dev/null
+  populate_task_map "asktool" "$repo_dir"
+
+  run "$SHIV_BIN_DIR/asktool"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"DEFAULT"* ]]
+}
+
+@test "shim: subtask name is ambiguous when _default exists" {
+  local repo_dir
+  repo_dir=$(create_default_plus_subtasks_repo "asktool")
+  shiv install asktool "$repo_dir" 2>/dev/null
+  populate_task_map "asktool" "$repo_dir"
+
+  run "$SHIV_BIN_DIR/asktool" question hello
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Ambiguous"* ]]
+  [[ "$output" == *"--"* ]]
+}
+
+@test "shim: subtask alone is ambiguous when _default exists" {
+  local repo_dir
+  repo_dir=$(create_default_plus_subtasks_repo "asktool")
+  shiv install asktool "$repo_dir" 2>/dev/null
+  populate_task_map "asktool" "$repo_dir"
+
+  run "$SHIV_BIN_DIR/asktool" info
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Ambiguous"* ]]
+}
+
+@test "shim: -- before subtask name routes to _default" {
+  local repo_dir
+  repo_dir=$(create_default_plus_subtasks_repo "asktool")
+  shiv install asktool "$repo_dir" 2>/dev/null
+  populate_task_map "asktool" "$repo_dir"
+
+  run "$SHIV_BIN_DIR/asktool" -- question hello
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"DEFAULT question hello"* ]]
+}
+
+@test "shim: subtask -- args routes to subtask" {
+  local repo_dir
+  repo_dir=$(create_default_plus_subtasks_repo "asktool")
+  shiv install asktool "$repo_dir" 2>/dev/null
+  populate_task_map "asktool" "$repo_dir"
+
+  run "$SHIV_BIN_DIR/asktool" question -- hello
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"QUESTION"* ]]
+  [[ "$output" == *"hello"* ]]
+}
+
+@test "shim: unrecognized arg falls through to _default" {
+  local repo_dir
+  repo_dir=$(create_default_plus_subtasks_repo "asktool")
+  shiv install asktool "$repo_dir" 2>/dev/null
+  populate_task_map "asktool" "$repo_dir"
+
+  run "$SHIV_BIN_DIR/asktool" "summarize this"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"DEFAULT summarize this"* ]]
+}
+
+@test "shim: flag args fall through to _default" {
+  local repo_dir
+  repo_dir=$(create_default_plus_subtasks_repo "asktool")
+  shiv install asktool "$repo_dir" 2>/dev/null
+  populate_task_map "asktool" "$repo_dir"
+
+  run "$SHIV_BIN_DIR/asktool" -m sonnet
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"DEFAULT -m sonnet"* ]]
+}
+
+@test "shim: -- with no further args runs _default with no args" {
+  local repo_dir
+  repo_dir=$(create_default_plus_subtasks_repo "asktool")
+  shiv install asktool "$repo_dir" 2>/dev/null
+  populate_task_map "asktool" "$repo_dir"
+
+  run "$SHIV_BIN_DIR/asktool" --
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"DEFAULT"* ]]
+}
