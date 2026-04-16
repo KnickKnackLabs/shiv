@@ -127,21 +127,50 @@ case "\${1:-}" in
     _shiv_handle_tasks "\$@"
     ;;
   *)
-    # Default task takes priority over space resolution — tools with a
-    # default task are single-command wrappers that pass all args through.
+    # --- Default task handling ---
+    # No args: run default task directly.
     if [ -n "\$DEFAULT_TASK" ] && [ -z "\${1:-}" ]; then
       exec mise -C "\$REPO" run -q "\$DEFAULT_TASK"
-    elif [ -n "\$DEFAULT_TASK" ]; then
-      exec mise -C "\$REPO" run -q "\$DEFAULT_TASK" "\$@"
     fi
+
+    # "--" as first arg: explicit disambiguation — send everything
+    # after "--" to the default task.
+    if [ -n "\$DEFAULT_TASK" ] && [ "\${1:-}" = "--" ]; then
+      shift
+      if [ \$# -gt 0 ]; then
+        exec mise -C "\$REPO" run -q "\$DEFAULT_TASK" "\$@"
+      else
+        exec mise -C "\$REPO" run -q "\$DEFAULT_TASK"
+      fi
+    fi
+
+    # Check if "--" is present in args (user is disambiguating).
+    _shiv_has_dash=false
+    for _shiv_arg in "\$@"; do
+      if [ "\$_shiv_arg" = "--" ]; then
+        _shiv_has_dash=true
+        break
+      fi
+    done
 
     # Space-to-colon resolution
     _shiv_ensure_task_map
     shiv_resolve_task "$name" "\$SHIV_TASK_MAP" "\$@"
     _shiv_rc=\$?
     if [ "\$_shiv_rc" -eq 0 ]; then
+      # Resolved a subtask. If a default task also exists and the user
+      # didn't use "--" to disambiguate, this is ambiguous.
+      if [ -n "\$DEFAULT_TASK" ] && [ "\$_shiv_has_dash" = "false" ]; then
+        echo "Ambiguous: '\$*' could be:" >&2
+        echo "  task '\$SHIV_RESOLVED_TASK' with args: \${SHIV_RESOLVED_ARGS[*]:-<none>}" >&2
+        echo "  default task with args: \$*" >&2
+        echo "Use -- to disambiguate:" >&2
+        echo "  $name \${SHIV_RESOLVED_TASK//:/ } -- \${SHIV_RESOLVED_ARGS[*]}     (task '\$SHIV_RESOLVED_TASK')" >&2
+        echo "  $name -- \$*     (default task)" >&2
+        exit 1
+      fi
       # Guard: only expand SHIV_RESOLVED_ARGS when non-empty.
-      # bash <4.4 treats "${empty_array[@]}" as unbound under set -u.
+      # bash <4.4 treats "\${empty_array[@]}" as unbound under set -u.
       if [ \${#SHIV_RESOLVED_ARGS[@]} -gt 0 ]; then
         exec mise -C "\$REPO" run -q "\$SHIV_RESOLVED_TASK" "\${SHIV_RESOLVED_ARGS[@]}"
       else
@@ -150,7 +179,10 @@ case "\${1:-}" in
     elif [ "\$_shiv_rc" -eq 1 ]; then
       exit 1  # ambiguous — error already printed to stderr
     fi
-    # rc=2 or no task map: fall through to mise
+    # rc=2 or no task map: fall through to default task or mise
+    if [ -n "\$DEFAULT_TASK" ]; then
+      exec mise -C "\$REPO" run -q "\$DEFAULT_TASK" "\$@"
+    fi
     exec mise -C "\$REPO" run -q "\$@"
     ;;
 esac
