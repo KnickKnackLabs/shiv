@@ -117,7 +117,7 @@ RESOLVE
 # --- main ---
 _shiv_check_repo
 export CALLER_PWD="\$PWD"
-_shiv_check_cwd
+_shiv_check_cwd "\$@"
 
 case "\${1:-}" in
   --help|-h|help)
