@@ -40,4 +40,4 @@ jobs:
           fi
 
       - name: Run completion tests
-        run: mise run -q test:completions
+        run: mise run -q test completions

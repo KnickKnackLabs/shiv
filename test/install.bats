@@ -251,6 +251,21 @@ run_install() {
   ! echo "$output" | grep -q "warning"
 }
 
+@test "install: shim warning includes the args as 'mise run ...' suggestion" {
+  # Regression: _shiv_check_cwd used to be called with no args, so $* inside
+  # the function was empty and the warning printed as 'mise run ' with a
+  # trailing space and no actionable suggestion.
+  local repo_dir
+  repo_dir=$(create_local_repo "myapp")
+  run_install "myapp" "$repo_dir"
+
+  local fake_dir="$TEST_HOME/projects/myapp"
+  mkdir -p "$fake_dir"
+
+  run bash -c "cd '$fake_dir' && '$SHIV_BIN_DIR/myapp' hello world 2>&1"
+  echo "$output" | grep -qE "to run from this directory instead: mise run hello world($|[^a-z])"
+}
+
 @test "install: shim does not warn from unrelated directory" {
   local repo_dir
   repo_dir=$(create_local_repo "myapp")
