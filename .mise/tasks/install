@@ -5,10 +5,6 @@
 #USAGE flag "--as <alias>" var=#true help="Command alias(es) — creates symlinks to the package shim"
 set -eo pipefail
 
-# shiv packages live on github.com. Pin GH_HOST so `gh repo clone` doesn't
-# resolve against a GHE instance when the user's default host is corporate.
-export GH_HOST=github.com
-
 REPO_DIR="$MISE_CONFIG_ROOT"
 source "$REPO_DIR/lib/shim.sh"
 source "$REPO_DIR/lib/format.sh"
@@ -95,18 +91,19 @@ else
     fi
   else
     mkdir -p "$SHIV_PACKAGES_DIR"
+    CLONE_URL="https://github.com/$GH_REPO.git"
     case "$REF_TYPE" in
       "")
-        gum spin --title "  Cloning $GH_REPO..." --show-error -- gh repo clone "$GH_REPO" "$TOOL_PATH" -- --single-branch
+        gum spin --title "  Cloning $GH_REPO..." --show-error -- git clone --single-branch "$CLONE_URL" "$TOOL_PATH"
         ;;
       branch)
-        gum spin --title "  Cloning $GH_REPO@$REF..." --show-error -- gh repo clone "$GH_REPO" "$TOOL_PATH" -- --branch "$REF" --single-branch
+        gum spin --title "  Cloning $GH_REPO@$REF..." --show-error -- git clone --branch "$REF" --single-branch "$CLONE_URL" "$TOOL_PATH"
         ;;
       tag)
-        gum spin --title "  Cloning $GH_REPO@$REF..." --show-error -- gh repo clone "$GH_REPO" "$TOOL_PATH" -- --branch "$REF" --depth 1 --single-branch
+        gum spin --title "  Cloning $GH_REPO@$REF..." --show-error -- git clone --branch "$REF" --depth 1 --single-branch "$CLONE_URL" "$TOOL_PATH"
         ;;
       commit)
-        gum spin --title "  Cloning $GH_REPO@$REF..." --show-error -- gh repo clone "$GH_REPO" "$TOOL_PATH" -- --depth 1 --single-branch
+        gum spin --title "  Cloning $GH_REPO@$REF..." --show-error -- git clone --depth 1 --single-branch "$CLONE_URL" "$TOOL_PATH"
         git -C "$TOOL_PATH" fetch --depth 1 origin "$REF" 2>&1 | sed 's/^/  /'
         git -C "$TOOL_PATH" checkout "$REF" 2>&1 | sed 's/^/  /'
         ;;
