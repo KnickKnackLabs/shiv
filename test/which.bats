@@ -63,6 +63,17 @@ SHIM
   chmod +x "$executable"
 }
 
+create_plain_executable() {
+  local executable="$1"
+
+  mkdir -p "$(dirname "$executable")"
+  cat > "$executable" <<'PLAIN'
+#!/usr/bin/env bash
+echo plain executable
+PLAIN
+  chmod +x "$executable"
+}
+
 create_global_package() {
   local name="$1"
   local repo_dir="$2"
@@ -126,6 +137,38 @@ run_which_from() {
   run run_which_from "$caller_dir" "charlie"
   [ "$status" -eq 0 ]
   [ "$output" = "$global_repo" ]
+}
+
+@test "which: falls back to global registry when mise resolves a non-shiv executable" {
+  local caller_dir="$TEST_HOME/project"
+  local global_repo="$SHIV_PACKAGES_DIR/charlie"
+  local non_shiv_executable="$TEST_HOME/.local/bin/charlie"
+
+  create_global_package "charlie" "$global_repo"
+  create_plain_executable "$non_shiv_executable"
+
+  export FAKE_MISE_CWD="$caller_dir"
+  export FAKE_MISE_NAME="charlie"
+  export FAKE_MISE_PATH="$non_shiv_executable"
+
+  run run_which_from "$caller_dir" "charlie"
+  [ "$status" -eq 0 ]
+  [ "$output" = "$global_repo" ]
+}
+
+@test "which: rejects non-shiv mise executable when no global fallback exists" {
+  local caller_dir="$TEST_HOME/project"
+  local non_shiv_executable="$TEST_HOME/.local/bin/echo-tool"
+
+  create_plain_executable "$non_shiv_executable"
+
+  export FAKE_MISE_CWD="$caller_dir"
+  export FAKE_MISE_NAME="echo-tool"
+  export FAKE_MISE_PATH="$non_shiv_executable"
+
+  run run_which_from "$caller_dir" "echo-tool"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"shiv: 'echo-tool' is not a managed tool"* ]]
 }
 
 @test "which: global alias fallback still resolves" {
