@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # Formatting utilities for shiv output
 
 # strip_ansi — Remove ANSI escape codes from text

@@ -1,26 +1,57 @@
 #!/usr/bin/env bash
 #MISE description="Print the install path of a managed tool"
 #USAGE arg "<name>" help="Package name or alias to look up"
-set -eo pipefail
+set -euo pipefail
 
 source "$MISE_CONFIG_ROOT/lib/shim.sh"
 
 NAME="${usage_name}"
+CALLER_DIR="${CALLER_PWD:-${MISE_ORIGINAL_CWD:-$PWD}}"
+MISE_BIN="${MISE_BIN:-mise}"
 
 shiv_init_registry
 
-# Try direct lookup, then resolve as alias
-PATH_VAL=$(shiv_registry_path "$NAME")
+mise_scoped_package_path() {
+  local name="$1"
+  local caller_dir="$2"
+  local executable package_root
 
-if [ -z "$PATH_VAL" ]; then
-  # Maybe it's an alias
-  RESOLVED=$(shiv_registry_resolve "$NAME")
-  if [ -n "$RESOLVED" ]; then
-    PATH_VAL=$(shiv_registry_path "$RESOLVED")
+  if ! executable=$("$MISE_BIN" -C "$caller_dir" which "$name" 2>/dev/null); then
+    return 1
   fi
-fi
 
-if [ -z "$PATH_VAL" ]; then
+  [ -f "$executable" ] || return 1
+  grep -q "# managed by shiv" "$executable" 2>/dev/null || return 1
+
+  package_root=$(sed -n 's/^REPO="\([^"]*\)".*/\1/p' "$executable" | head -1)
+  [ -n "$package_root" ] || return 1
+
+  echo "$package_root"
+}
+
+global_package_path() {
+  local name="$1"
+  local path_val resolved
+
+  path_val=$(shiv_registry_path "$name")
+
+  if [ -z "$path_val" ]; then
+    resolved=$(shiv_registry_resolve "$name")
+    if [ -n "$resolved" ]; then
+      path_val=$(shiv_registry_path "$resolved")
+    fi
+  fi
+
+  [ -n "$path_val" ] || return 1
+  echo "$path_val"
+}
+
+PATH_VAL=""
+if PATH_VAL=$(mise_scoped_package_path "$NAME" "$CALLER_DIR"); then
+  :
+elif PATH_VAL=$(global_package_path "$NAME"); then
+  :
+else
   echo "shiv: '$NAME' is not a managed tool" >&2
   echo "Run 'shiv list' to see managed tools." >&2
   exit 1

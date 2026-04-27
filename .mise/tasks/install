@@ -3,7 +3,7 @@
 #USAGE arg "<name>" help="Package name, optionally with ref (e.g., shimmer, frames@v1.0.0)"
 #USAGE arg "[path]" help="Local path to repo (optional — if omitted, clones from package index)"
 #USAGE flag "--as <alias>" var=#true help="Command alias(es) — creates symlinks to the package shim"
-set -eo pipefail
+set -euo pipefail
 
 REPO_DIR="$MISE_CONFIG_ROOT"
 source "$REPO_DIR/lib/shim.sh"
@@ -35,7 +35,9 @@ if [ -n "$LOCAL_PATH" ]; then
   TOOL_PATH="$(cd "$LOCAL_PATH" && pwd)"
 else
   # Package install — look up in sources and clone
-  GH_REPO=$(shiv_lookup "$NAME" || true)
+  if ! GH_REPO=$(shiv_lookup "$NAME"); then
+    GH_REPO=""
+  fi
   if [ -z "$GH_REPO" ]; then
     echo "" >&2
     echo "  ✗ '$NAME' not found in package index" >&2
@@ -124,12 +126,16 @@ if [ ! -f "$TOOL_PATH/mise.toml" ]; then
 fi
 
 shiv_create_shim "$NAME" "$TOOL_PATH"
-SHIV_REF="$REF" shiv_register "$NAME" "$TOOL_PATH" "${ALIASES[@]}"
+if [ -n "${usage_as:-}" ]; then
+  SHIV_REF="$REF" shiv_register "$NAME" "$TOOL_PATH" "${ALIASES[@]}"
+else
+  SHIV_REF="$REF" shiv_register "$NAME" "$TOOL_PATH"
+fi
 shiv_cache_tasks "$NAME" "$TOOL_PATH"
 shiv_cache_task_map "$NAME" "$TOOL_PATH"
 
 # Create alias symlinks
-if [ ${#ALIASES[@]} -gt 0 ]; then
+if [ -n "${usage_as:-}" ]; then
   shiv_create_alias_symlinks "$NAME" "${ALIASES[@]}"
 fi
 
@@ -188,8 +194,10 @@ if [ -f "$cache_file" ]; then
 fi
 
 # Format aliases
-alias_display="${ALIASES[*]}"
-alias_display="${alias_display:--}"
+alias_display="-"
+if [ -n "${usage_as:-}" ]; then
+  alias_display="${ALIASES[*]}"
+fi
 
 # Build summary card as key-value table
 {

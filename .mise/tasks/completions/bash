@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #MISE description="Output bash completion script"
 #MISE hide=true
-set -eo pipefail
+set -euo pipefail
 
 source "$MISE_CONFIG_ROOT/lib/shim.sh"
 
@@ -16,9 +16,11 @@ cat <<'HEADER'
 __shiv_rebuild_cache() {
   local name="$1" repo="$2" cache="$3"
   mkdir -p "$(dirname "$cache")"
-  mise tasks --json -C "$repo" 2>/dev/null \
+  if ! mise tasks --json -C "$repo" 2>/dev/null \
     | jq -r '.[] | select(.hide == false) | "\(.name)\t\(.description)"' \
-    > "$cache" 2>/dev/null || true
+    > "$cache" 2>/dev/null; then
+    rm -f "$cache"
+  fi
 }
 
 HEADER

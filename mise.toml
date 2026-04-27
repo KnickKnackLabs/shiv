@@ -1,14 +1,19 @@
 [settings]
 quiet = true
 task_output = "interleave"
+experimental = true
+
+[plugins]
+shiv = "https://github.com/KnickKnackLabs/vfox-shiv"
 
 [tools]
+"shiv:codebase" = "0.2.0"
 bats = "1.13.0"
 gum = "0.17.0"
 jsonschema = "14.14.2"
 
 [_.codebase]
-lint = ["mise-settings", "gum-table"]
+lint = ["mise-settings", "bats-test-helper", "bats-test-task", "mcr-scope", "or-true", "shellcheck", "gum-table"]
 
 [_.codebase.scope]
 gum-table = ".mise/tasks"

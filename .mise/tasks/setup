@@ -7,7 +7,9 @@ echo "Setting up $(basename "$MISE_CONFIG_ROOT")..."
 # Install codebase via shiv directly (not vfox-shiv) to avoid circular dependency:
 # shiv can't depend on vfox-shiv to install its own packages.
 if command -v shiv &>/dev/null; then
-  shiv install codebase 2>/dev/null || true
+  if ! shiv install codebase 2>/dev/null; then
+    echo "WARN: codebase install failed — continuing setup" >&2
+  fi
 fi
 
 if command -v codebase &>/dev/null; then
