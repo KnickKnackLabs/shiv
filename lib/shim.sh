@@ -80,8 +80,12 @@ _shiv_ensure_task_map() {
   fi
   mkdir -p "\$(dirname "\$SHIV_TASK_MAP")"
   local tmp="\$SHIV_TASK_MAP.tmp"
-  mise tasks --json --hidden -C "\$REPO" 2>/dev/null \\
-    | jq -r '.[].name | gsub(":"; " ")' > "\$tmp" 2>/dev/null || true
+  if ! mise tasks --json --hidden -C "\$REPO" 2>/dev/null \\
+    | jq -r '.[].name | gsub(":"; " ")' > "\$tmp" 2>/dev/null; then
+    rm -f "\$tmp"
+    return 0
+  fi
+
   if [ -s "\$tmp" ]; then
     mv "\$tmp" "\$SHIV_TASK_MAP"
   else
@@ -102,17 +106,18 @@ _shiv_handle_tasks() {
 
 SCRIPT
 
-  # Part 2: embed resolver function (quoted heredoc — no variable expansion)
-  cat >> "$SHIV_BIN_DIR/$name" <<'RESOLVE'
+  {
+    # Part 2: embed resolver function (quoted heredoc — no variable expansion)
+    cat <<'RESOLVE'
 # --- embedded from lib/resolve.sh ---
 RESOLVE
-  # Strip the shebang line and inject the function body
-  sed '1{/^#!/d;}' "$REPO_LIB_DIR/resolve.sh" >> "$SHIV_BIN_DIR/$name"
-  echo '# --- end embedded resolver ---' >> "$SHIV_BIN_DIR/$name"
-  echo '' >> "$SHIV_BIN_DIR/$name"
+    # Strip the shebang line and inject the function body
+    sed '1{/^#!/d;}' "$REPO_LIB_DIR/resolve.sh"
+    echo '# --- end embedded resolver ---'
+    echo ''
 
-  # Part 3: main dispatch logic
-  cat >> "$SHIV_BIN_DIR/$name" <<SCRIPT
+    # Part 3: main dispatch logic
+    cat <<SCRIPT
 
 # --- main ---
 _shiv_check_repo
@@ -187,6 +192,7 @@ case "\${1:-}" in
     ;;
 esac
 SCRIPT
+  } >> "$SHIV_BIN_DIR/$name"
 
   chmod +x "$SHIV_BIN_DIR/$name"
 }

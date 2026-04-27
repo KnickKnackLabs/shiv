@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #MISE description="Pull latest and refresh shims — optionally for a single package"
 #USAGE arg "[name]" help="Package to update (default: all)"
-set -eo pipefail
+set -euo pipefail
 
 source "$MISE_CONFIG_ROOT/lib/shim.sh"
 
@@ -131,7 +131,9 @@ else
   echo "Updating $COUNT tool(s)..."
   echo ""
   while IFS=$'\t' read -r name repo _ref; do
-    update_one "$name" || true
+    if ! update_one "$name"; then
+      :
+    fi
   done < <(shiv_registry_entries)
 fi
 

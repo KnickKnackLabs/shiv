@@ -32,7 +32,7 @@ shiv_register() {
   shiv_init_registry
 
   # Check for alias collisions
-  for alias in "${aliases[@]}"; do
+  for alias in ${aliases[@]+"${aliases[@]}"}; do
     # Alias shadows an existing package name?
     if [ -n "$(shiv_registry_path "$alias")" ]; then
       echo "Error: alias '$alias' conflicts with existing package '$alias'" >&2
@@ -49,7 +49,7 @@ shiv_register() {
 
   # Build aliases JSON (null if none)
   local aliases_json="null"
-  if [ ${#aliases[@]} -gt 0 ]; then
+  if [ $# -gt 0 ]; then
     aliases_json=$(printf '%s\n' "${aliases[@]}" | jq -R . | jq -s .)
   fi
 
@@ -98,7 +98,7 @@ shiv_registry_set_aliases() {
   local aliases=("$@")
 
   # Check for alias collisions
-  for alias in "${aliases[@]}"; do
+  for alias in ${aliases[@]+"${aliases[@]}"}; do
     if [ -n "$(shiv_registry_path "$alias")" ]; then
       echo "Error: alias '$alias' conflicts with existing package '$alias'" >&2
       return 1
@@ -112,7 +112,7 @@ shiv_registry_set_aliases() {
   done
 
   local tmp
-  if [ ${#aliases[@]} -eq 0 ]; then
+  if [ $# -eq 0 ]; then
     tmp=$(jq --arg n "$name" '.[$n] |= del(.aliases)' "$SHIV_REGISTRY")
   else
     local aliases_json

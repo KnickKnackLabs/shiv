@@ -14,6 +14,9 @@ on:
       - test/completions.bats
   workflow_dispatch:
 
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
 jobs:
   test-completions:
     strategy:

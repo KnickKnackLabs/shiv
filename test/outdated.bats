@@ -91,7 +91,9 @@ create_local_package() {
   git -C "$pkg_dir" commit -q -m "init"
 
   # Remove origin so there's no remote
-  git -C "$pkg_dir" remote remove origin 2>/dev/null || true
+  if ! git -C "$pkg_dir" remote remove origin 2>/dev/null; then
+    :
+  fi
 
   shiv_register "$name" "$pkg_dir"
 }

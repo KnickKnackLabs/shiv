@@ -43,7 +43,9 @@ if [ -z "$TERM" ] || [ "$TERM" = "dumb" ]; then
 fi
 
 # --- Load chicle with graceful fallback ---
-eval "$(curl -fsSL "$CHICLE_URL" 2>/dev/null)" 2>/dev/null || true
+if ! eval "$(curl -fsSL "$CHICLE_URL" 2>/dev/null)" 2>/dev/null; then
+  :
+fi
 
 # If chicle loaded but tput isn't available (e.g. Alpine), override tput-dependent
 # functions and force non-interactive (chicle_choose needs cursor control)
@@ -245,7 +247,9 @@ else
 fi
 
 MISE_BIN="$(command -v mise)"
-(cd "$SHIV_INSTALL_PATH" && "$MISE_BIN" trust -q 2>/dev/null) || true
+if ! (cd "$SHIV_INSTALL_PATH" && "$MISE_BIN" trust -q 2>/dev/null); then
+  :
+fi
 echo ""
 
 # --- Step 4: Configure registries ---
@@ -344,9 +348,11 @@ fi
 
 if [ "$ALREADY_CONFIGURED" = "0" ] && [ -n "$SHELL_CONFIG" ]; then
   add_shell_config() {
-    echo "" >> "$SHELL_CONFIG"
-    echo "# shiv — managed tool shims" >> "$SHELL_CONFIG"
-    echo "$EVAL_LINE" >> "$SHELL_CONFIG"
+    {
+      echo ""
+      echo "# shiv — managed tool shims"
+      echo "$EVAL_LINE"
+    } >> "$SHELL_CONFIG"
     chicle_log --success "Added to $SHELL_CONFIG"
   }
 

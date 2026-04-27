@@ -39,9 +39,13 @@ shiv_cache_task_map() {
   local cache="$SHIV_CACHE_DIR/tasks/$name"
   local tmp="$cache.tmp"
   mkdir -p "$SHIV_CACHE_DIR/tasks"
-  mise tasks --json --hidden -C "$repo_dir" 2>/dev/null \
+  if ! mise tasks --json --hidden -C "$repo_dir" 2>/dev/null \
     | jq -r '.[].name | gsub(":"; " ")' \
-    > "$tmp" || true
+    > "$tmp"; then
+    rm -f "$tmp"
+    return 0
+  fi
+
   if [ -s "$tmp" ]; then
     mv "$tmp" "$cache"
   else

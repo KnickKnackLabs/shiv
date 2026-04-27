@@ -6,8 +6,9 @@ SHIV_SOURCES_DIR="${SHIV_SOURCES_DIR:-$SHIV_CONFIG_DIR/sources}"
 
 # SHIV_SOURCES: comma-delimited list of sources.json files to search.
 # If not set by the user, auto-discover from SHIV_SOURCES_DIR.
+SHIV_SOURCES="${SHIV_SOURCES:-}"
+
 if [ -z "$SHIV_SOURCES" ] && [ -d "$SHIV_SOURCES_DIR" ]; then
-  SHIV_SOURCES=""
   for _sf in "$SHIV_SOURCES_DIR"/*.json; do
     [ -f "$_sf" ] || continue
     SHIV_SOURCES="${SHIV_SOURCES:+$SHIV_SOURCES,}$_sf"
@@ -92,7 +93,7 @@ shiv_detect_ref_type() {
   # Neither a named ref nor a SHA — report the error
   if [ "$ls_exit" -ne 0 ]; then
     echo "Error: failed to query refs for $gh_repo" >&2
-    echo "$ls_output" | sed 's/^/  /' >&2
+    printf '%s\n' "$ls_output" | sed 's/^/  /' >&2
   else
     echo "Error: ref '$ref' not found in $gh_repo" >&2
   fi

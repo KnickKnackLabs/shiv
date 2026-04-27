@@ -75,7 +75,10 @@ else
 
     # Check shim points to right repo
     if [ -f "$SHIV_BIN_DIR/$name" ]; then
-      shim_repo=$(grep '^REPO=' "$SHIV_BIN_DIR/$name" 2>/dev/null | cut -d'"' -f2 || true)
+      shim_repo=""
+      if ! shim_repo=$(grep '^REPO=' "$SHIV_BIN_DIR/$name" 2>/dev/null | cut -d'"' -f2); then
+        shim_repo=""
+      fi
       if [ -n "$shim_repo" ] && [ "$shim_repo" != "$repo" ]; then
         issues+="    ✗ shim points to $shim_repo but registry says $repo"$'\n'
         issue_count=$((issue_count + 1))
