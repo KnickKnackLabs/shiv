@@ -112,16 +112,18 @@ else
     esac
   fi
 
-  # Set up dependencies
+fi
+
+if [ -f "$TOOL_PATH/mise.toml" ]; then
+  # Set up dependencies after resolving TOOL_PATH so both package installs and
+  # local path installs trust/install the tool repo before shim creation.
   printf -v escaped_path '%q' "$TOOL_PATH"
   dep_output=$(gum spin --title "  Setting up dependencies..." -- bash -c "cd $escaped_path && mise trust -q 2>&1 && mise install -q 2>&1") || {
     echo "  ✗ Failed to install dependencies for $NAME" >&2
     echo "$dep_output" | strip_ansi | sed 's/^/    /' >&2
     exit 1
   }
-fi
-
-if [ ! -f "$TOOL_PATH/mise.toml" ]; then
+else
   echo "  ⚠ No mise.toml found at $TOOL_PATH"
 fi
 

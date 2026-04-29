@@ -70,6 +70,24 @@ run_install() {
   "${cmd[@]}" 2>&1
 }
 
+# Helper: record dependency-setup calls while delegating the outer shiv task
+# invocation to the real mise binary.
+record_dependency_mise_calls() {
+  local real_mise
+  real_mise="$(command -v mise)"
+  export MISE_CALL_LOG="$TEST_HOME/mise-calls.log"
+
+  cat > "$BATS_TEST_TMPDIR/mock-bin/mise" <<MOCK
+#!/usr/bin/env bash
+if [ "\${1:-}" = "-C" ] && [ "\${2:-}" = "$REPO_DIR" ]; then
+  exec "$real_mise" "\$@"
+fi
+printf '%s\t%s\n' "\$PWD" "\$*" >> "$MISE_CALL_LOG"
+exit 0
+MOCK
+  chmod +x "$BATS_TEST_TMPDIR/mock-bin/mise"
+}
+
 # ============================================================================
 # Local path install
 # ============================================================================
@@ -100,6 +118,18 @@ run_install() {
 
   run_install "myapp" "$repo_dir"
   [ -n "$(shiv_registry_path "myapp")" ]
+}
+
+@test "install: local path install runs mise trust and install" {
+  local repo_dir
+  repo_dir=$(create_local_repo "myapp")
+  record_dependency_mise_calls
+
+  run run_install "myapp" "$repo_dir"
+  [ "$status" -eq 0 ]
+
+  grep -F "$(printf '%s\ttrust -q' "$repo_dir")" "$MISE_CALL_LOG"
+  grep -F "$(printf '%s\tinstall -q' "$repo_dir")" "$MISE_CALL_LOG"
 }
 
 @test "install: shows branch in summary card" {
