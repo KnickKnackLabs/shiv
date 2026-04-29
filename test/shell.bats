@@ -35,48 +35,22 @@ teardown() {
 
   run shiv_emit_path_exports
   [ "$status" -eq 0 ]
-  [[ "$output" == *"export PATH=\"$SHIV_BIN_DIR:"* ]]
+  [[ "$output" == *"export PATH='$SHIV_BIN_DIR:"* ]]
 }
 
-@test "shell: skips SHIV_BIN_DIR when already on PATH" {
+@test "shell: skips SHIV_BIN_DIR when already first on PATH" {
   export PATH="$SHIV_BIN_DIR:$PATH"
 
   run shiv_emit_path_exports
   [ "$status" -eq 0 ]
-  [[ "$output" != *"export PATH=\"$SHIV_BIN_DIR:"* ]]
+  [ -z "$output" ]
 }
 
 # ============================================================================
 # Mise shims on PATH
 # ============================================================================
 
-@test "shell: adds mise shims dir to PATH when present on disk" {
-  local shims_dir="$TEST_HOME/.local/share/mise/shims"
-  mkdir -p "$shims_dir"
-  export PATH="${PATH//$shims_dir:/}"
-
-  run shiv_emit_path_exports
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"export PATH=\"$shims_dir:"* ]]
-}
-
-@test "shell: skips mise shims dir when already on PATH" {
-  local shims_dir="$TEST_HOME/.local/share/mise/shims"
-  mkdir -p "$shims_dir"
-  export PATH="$shims_dir:$PATH"
-
-  run shiv_emit_path_exports
-  [ "$status" -eq 0 ]
-  [[ "$output" != *"export PATH=\"$shims_dir:"* ]]
-}
-
-@test "shell: skips mise shims dir when it does not exist" {
-  run shiv_emit_path_exports
-  [ "$status" -eq 0 ]
-  [[ "$output" != *"mise/shims"* ]]
-}
-
-@test "shell: mise shims emitted after SHIV_BIN_DIR (ends up first on PATH)" {
+@test "shell: adds mise shims dir before SHIV_BIN_DIR when present on disk" {
   local shims_dir="$TEST_HOME/.local/share/mise/shims"
   mkdir -p "$shims_dir"
   export PATH="${PATH//$SHIV_BIN_DIR:/}"
@@ -84,16 +58,35 @@ teardown() {
 
   run shiv_emit_path_exports
   [ "$status" -eq 0 ]
+  [[ "$output" == *"export PATH='$shims_dir:$SHIV_BIN_DIR:"* ]]
+}
 
-  [[ "$output" == *"$SHIV_BIN_DIR"* ]]
-  [[ "$output" == *"$shims_dir"* ]]
+@test "shell: skips output when mise shims and SHIV_BIN_DIR are already ordered" {
+  local shims_dir="$TEST_HOME/.local/share/mise/shims"
+  mkdir -p "$shims_dir"
+  export PATH="$shims_dir:$SHIV_BIN_DIR:$PATH"
 
-  # SHIV_BIN_DIR should appear before mise shims in output
-  # (since both prepend, the later one ends up first on PATH)
-  local bin_line shims_line
-  bin_line=$(echo "$output" | grep -n "$SHIV_BIN_DIR" | head -1 | cut -d: -f1)
-  shims_line=$(echo "$output" | grep -n "mise/shims" | head -1 | cut -d: -f1)
-  [ "$bin_line" -lt "$shims_line" ]
+  run shiv_emit_path_exports
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "shell: skips mise shims dir when it does not exist" {
+  local shims_dir="$TEST_HOME/.local/share/mise/shims"
+
+  run shiv_emit_path_exports
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"$shims_dir"* ]]
+}
+
+@test "shell: corrects wrong-order PATH so mise shims precede SHIV_BIN_DIR" {
+  local shims_dir="$TEST_HOME/.local/share/mise/shims"
+  mkdir -p "$shims_dir"
+  export PATH="$SHIV_BIN_DIR:$shims_dir:$PATH"
+
+  run shiv_emit_path_exports
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"export PATH='$shims_dir:$SHIV_BIN_DIR:"* ]]
 }
 
 @test "shell: respects MISE_DATA_DIR for shims path" {
@@ -104,7 +97,7 @@ teardown() {
 
   run shiv_emit_path_exports
   [ "$status" -eq 0 ]
-  [[ "$output" == *"export PATH=\"$shims_dir:"* ]]
+  [[ "$output" == *"export PATH='$shims_dir:$SHIV_BIN_DIR:"* ]]
 }
 
 @test "shell: respects XDG_DATA_HOME for shims path" {
@@ -116,7 +109,7 @@ teardown() {
 
   run shiv_emit_path_exports
   [ "$status" -eq 0 ]
-  [[ "$output" == *"export PATH=\"$shims_dir:"* ]]
+  [[ "$output" == *"export PATH='$shims_dir:$SHIV_BIN_DIR:"* ]]
 }
 
 # ============================================================================
@@ -133,7 +126,34 @@ teardown() {
 
   # mise shims should come before SHIV_BIN_DIR
   local shims_pos bin_pos
-  shims_pos=$(echo "$PATH" | tr ':' '\n' | grep -n "mise/shims" | head -1 | cut -d: -f1)
-  bin_pos=$(echo "$PATH" | tr ':' '\n' | grep -n "$SHIV_BIN_DIR" | head -1 | cut -d: -f1)
+  shims_pos=$(echo "$PATH" | tr ':' '\n' | grep -nF "$shims_dir" | head -1 | cut -d: -f1)
+  bin_pos=$(echo "$PATH" | tr ':' '\n' | grep -nF "$SHIV_BIN_DIR" | head -1 | cut -d: -f1)
   [ "$shims_pos" -lt "$bin_pos" ]
+}
+
+@test "shell: eval output corrects existing wrong-order PATH" {
+  local shims_dir="$TEST_HOME/.local/share/mise/shims"
+  mkdir -p "$shims_dir"
+  export PATH="$SHIV_BIN_DIR:$shims_dir:$PATH"
+
+  eval "$(shiv_emit_path_exports)"
+
+  local shims_pos bin_pos
+  shims_pos=$(echo "$PATH" | tr ':' '\n' | grep -nF "$shims_dir" | head -1 | cut -d: -f1)
+  bin_pos=$(echo "$PATH" | tr ':' '\n' | grep -nF "$SHIV_BIN_DIR" | head -1 | cut -d: -f1)
+  [ "$shims_pos" -lt "$bin_pos" ]
+}
+
+@test "shell: eval output de-duplicates managed PATH entries" {
+  local shims_dir="$TEST_HOME/.local/share/mise/shims"
+  mkdir -p "$shims_dir"
+  export PATH="$SHIV_BIN_DIR:$shims_dir:$SHIV_BIN_DIR:$PATH:$shims_dir"
+
+  eval "$(shiv_emit_path_exports)"
+
+  local shims_count bin_count
+  shims_count=$(echo "$PATH" | tr ':' '\n' | grep -cF "$shims_dir")
+  bin_count=$(echo "$PATH" | tr ':' '\n' | grep -cF "$SHIV_BIN_DIR")
+  [ "$shims_count" -eq 1 ]
+  [ "$bin_count" -eq 1 ]
 }

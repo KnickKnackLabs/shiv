@@ -207,27 +207,76 @@ shiv_create_alias_symlinks() {
   done
 }
 
+# Quote a value for POSIX-ish shell eval output.
+shiv_shell_quote() {
+  printf "'"
+  printf '%s' "$1" | sed "s/'/'\\\\''/g"
+  printf "'"
+}
+
+# Remove exact PATH entries from a colon-separated path string.
+shiv_path_remove_entries() {
+  local path_value="$1"
+  shift
+
+  local result=""
+  local result_set="false"
+  local entry=""
+  local remove=""
+  local remainder="$path_value:"
+  local skip="false"
+
+  while [ -n "$remainder" ]; do
+    entry="${remainder%%:*}"
+    remainder="${remainder#*:}"
+
+    skip="false"
+    for remove in "$@"; do
+      if [ "$entry" = "$remove" ]; then
+        skip="true"
+        break
+      fi
+    done
+
+    if [ "$skip" = "false" ]; then
+      if [ "$result_set" = "true" ]; then
+        result="$result:$entry"
+      else
+        result="$entry"
+        result_set="true"
+      fi
+    fi
+  done
+
+  printf '%s\n' "$result"
+}
+
 # Emit shell export statements to put shiv's bin dir and mise's shims dir on PATH.
 # Designed to be eval'd: `eval "$(shiv_emit_path_exports)"`
-# Mise shims are emitted after SHIV_BIN_DIR so they end up first on PATH —
-# when a directory's mise.toml pins a version, the mise shim wins over the
-# global shiv shim.
+# Mise shims must precede SHIV_BIN_DIR so repo-scoped mise pins win over the
+# global shiv shim. Normalize order and de-duplicate, instead of only checking
+# that both directories are present somewhere on PATH.
 shiv_emit_path_exports() {
-  # Ensure SHIV_BIN_DIR (~/.local/bin) is on PATH
-  case ":$PATH:" in
-    *":$SHIV_BIN_DIR:"*) ;;
-    *) echo "export PATH=\"$SHIV_BIN_DIR:\$PATH\"" ;;
-  esac
-
-  # Ensure mise shims are on PATH so shiv packages installed via vfox-shiv
-  # resolve correctly in non-interactive shells (agent sessions, scripts, etc.).
+  local current_path="${PATH:-}"
   local mise_shims_dir="${MISE_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/mise}/shims"
+  local path_rest=""
+  local normalized_path=""
+
   if [ -d "$mise_shims_dir" ]; then
-    case ":$PATH:" in
-      *":$mise_shims_dir:"*) ;;
-      *) echo "export PATH=\"$mise_shims_dir:\$PATH\"" ;;
-    esac
+    path_rest=$(shiv_path_remove_entries "$current_path" "$mise_shims_dir" "$SHIV_BIN_DIR")
+    normalized_path="$mise_shims_dir:$SHIV_BIN_DIR"
+  else
+    path_rest=$(shiv_path_remove_entries "$current_path" "$SHIV_BIN_DIR")
+    normalized_path="$SHIV_BIN_DIR"
   fi
+
+  if [ -n "$path_rest" ]; then
+    normalized_path="$normalized_path:$path_rest"
+  fi
+
+  [ "$normalized_path" = "$current_path" ] && return 0
+
+  printf 'export PATH=%s\n' "$(shiv_shell_quote "$normalized_path")"
 }
 
 # Remove alias symlinks for a package (only if they point to the expected target)
