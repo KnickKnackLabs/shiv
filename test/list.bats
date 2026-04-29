@@ -7,7 +7,7 @@ load helpers
 setup() {
   source "$REPO_DIR/lib/shim.sh"
 
-  export TEST_HOME="$BATS_TMPDIR/shiv-test-$$"
+  export TEST_HOME="$BATS_TEST_TMPDIR/shiv"
   mkdir -p "$TEST_HOME"
 
   export SHIV_BIN_DIR="$TEST_HOME/.local/bin"
@@ -21,9 +21,6 @@ setup() {
   setup_shiv_on_path
 }
 
-teardown() {
-  rm -rf "$TEST_HOME"
-}
 
 # Helper: create a git repo with a specific commit date
 # Usage: create_test_repo <name> [iso_date] [branch]

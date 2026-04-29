@@ -7,7 +7,7 @@ setup() {
   source "$REPO_DIR/lib/shim.sh"
 
   # Use a temporary home for isolation
-  export TEST_HOME="$BATS_TMPDIR/shiv-test-$$"
+  export TEST_HOME="$BATS_TEST_TMPDIR/shiv"
   mkdir -p "$TEST_HOME"
 
   # Override shiv paths to use test home
@@ -24,9 +24,6 @@ setup() {
   shiv_register "shiv" "$REPO_DIR"
 }
 
-teardown() {
-  rm -rf "$TEST_HOME"
-}
 
 # ============================================================================
 # Cache generation
@@ -150,8 +147,8 @@ teardown() {
     skip "zsh not found"
   fi
   shiv_cache_tasks "shiv" "$REPO_DIR"
-  mise -C "$REPO_DIR" run -q completions:zsh > "$BATS_TMPDIR/comp.zsh"
-  run zsh -n "$BATS_TMPDIR/comp.zsh"
+  mise -C "$REPO_DIR" run -q completions:zsh > "$BATS_TEST_TMPDIR/comp.zsh"
+  run zsh -n "$BATS_TEST_TMPDIR/comp.zsh"
   [ "$status" -eq 0 ]
 }
 
@@ -178,8 +175,8 @@ teardown() {
     skip "fish not found"
   fi
   shiv_cache_tasks "shiv" "$REPO_DIR"
-  mise -C "$REPO_DIR" run -q completions:fish > "$BATS_TMPDIR/comp.fish"
-  run fish -n "$BATS_TMPDIR/comp.fish"
+  mise -C "$REPO_DIR" run -q completions:fish > "$BATS_TEST_TMPDIR/comp.fish"
+  run fish -n "$BATS_TEST_TMPDIR/comp.fish"
   [ "$status" -eq 0 ]
 }
 

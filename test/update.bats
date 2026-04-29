@@ -7,7 +7,7 @@ load helpers
 setup() {
   source "$REPO_DIR/lib/shim.sh"
 
-  export TEST_HOME="$BATS_TMPDIR/shiv-test-$$"
+  export TEST_HOME="$BATS_TEST_TMPDIR/shiv"
   mkdir -p "$TEST_HOME"
 
   export SHIV_BIN_DIR="$TEST_HOME/.local/bin"
@@ -22,9 +22,6 @@ setup() {
   setup_shiv_on_path
 }
 
-teardown() {
-  rm -rf "$TEST_HOME"
-}
 
 # Helper: create a git repo with a remote (bare repo as origin)
 create_test_repo_with_remote() {
@@ -53,7 +50,7 @@ create_test_repo_with_remote() {
 push_remote_commit() {
   local name="$1"
   local bare_dir="$TEST_HOME/remotes/$name.git"
-  local tmp_dir="$TEST_HOME/tmp-clone-$$"
+  local tmp_dir="$TEST_HOME/tmp-clone"
 
   git clone -q "$bare_dir" "$tmp_dir"
   git -C "$tmp_dir" config user.email "test@test.com"
@@ -101,7 +98,7 @@ extract_column() {
 }
 
 @test "update: missing repo directory shows error" {
-  shiv_register "gone" "/tmp/nonexistent-repo-$$"
+  shiv_register "gone" "$TEST_HOME/nonexistent-repo"
   run run_update "gone"
   [ "$status" -ne 0 ]
   echo "$output" | grep -q "repo not found"
