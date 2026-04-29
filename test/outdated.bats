@@ -7,7 +7,7 @@ load helpers
 setup() {
   source "$REPO_DIR/lib/shim.sh"
 
-  export TEST_HOME="$BATS_TMPDIR/shiv-test-$$"
+  export TEST_HOME="$BATS_TEST_TMPDIR/shiv"
   mkdir -p "$TEST_HOME"
 
   export SHIV_BIN_DIR="$TEST_HOME/.local/bin"
@@ -25,9 +25,6 @@ setup() {
   setup_shiv_on_path
 }
 
-teardown() {
-  rm -rf "$TEST_HOME"
-}
 
 # Helper: create a bare remote repo with tags
 # Usage: create_remote <name> [tag1 tag2 ...]
@@ -324,7 +321,7 @@ create_local_package() {
 }
 
 @test "outdated: missing repo shows repo missing" {
-  shiv_register "ghost" "/tmp/nonexistent-shiv-test-$$"
+  shiv_register "ghost" "$TEST_HOME/nonexistent-repo"
 
   run shiv outdated
   [ "$status" -eq 0 ]

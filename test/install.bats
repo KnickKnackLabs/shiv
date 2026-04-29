@@ -7,7 +7,7 @@ load helpers
 setup() {
   source "$REPO_DIR/lib/shim.sh"
 
-  export TEST_HOME="$BATS_TMPDIR/shiv-test-$$"
+  export TEST_HOME="$BATS_TEST_TMPDIR/shiv"
   mkdir -p "$TEST_HOME"
 
   export SHIV_BIN_DIR="$TEST_HOME/.local/bin"
@@ -25,9 +25,6 @@ setup() {
   export SHIV_SKIP_CACHE=1
 }
 
-teardown() {
-  rm -rf "$TEST_HOME"
-}
 
 # Helper: create a local repo to install from (simulates local path install)
 create_local_repo() {

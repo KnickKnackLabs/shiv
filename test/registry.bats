@@ -6,7 +6,7 @@ REPO_DIR="$BATS_TEST_DIRNAME/.."
 setup() {
   source "$REPO_DIR/lib/shim.sh"
 
-  export TEST_HOME="$BATS_TMPDIR/shiv-test-$$"
+  export TEST_HOME="$BATS_TEST_TMPDIR/shiv"
   mkdir -p "$TEST_HOME"
 
   export SHIV_BIN_DIR="$TEST_HOME/.local/bin"
@@ -20,9 +20,6 @@ setup() {
   shiv_init_registry
 }
 
-teardown() {
-  rm -rf "$TEST_HOME"
-}
 
 # ============================================================================
 # Registry format

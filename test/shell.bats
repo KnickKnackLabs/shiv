@@ -7,7 +7,7 @@ load helpers
 setup() {
   source "$REPO_DIR/lib/shim.sh"
 
-  export TEST_HOME="$BATS_TMPDIR/shiv-test-$$"
+  export TEST_HOME="$BATS_TEST_TMPDIR/shiv"
   mkdir -p "$TEST_HOME"
 
   export HOME="$TEST_HOME"
@@ -22,9 +22,6 @@ setup() {
   shiv_init_registry
 }
 
-teardown() {
-  rm -rf "$TEST_HOME"
-}
 
 # ============================================================================
 # SHIV_BIN_DIR on PATH

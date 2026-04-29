@@ -7,7 +7,7 @@ load helpers
 setup() {
   source "$REPO_DIR/lib/shim.sh"
 
-  export TEST_HOME="$BATS_TMPDIR/shiv-test-$$"
+  export TEST_HOME="$BATS_TEST_TMPDIR/shiv"
   mkdir -p "$TEST_HOME"
 
   export SHIV_BIN_DIR="$TEST_HOME/.local/bin"
@@ -24,9 +24,6 @@ setup() {
   export SHIV_SKIP_CACHE=1
 }
 
-teardown() {
-  rm -rf "$TEST_HOME"
-}
 
 # Helper: create a minimal installed package (repo, shim, registry, cache)
 create_installed_package() {
@@ -211,8 +208,9 @@ MOCK
 
 @test "uninstall: summary card shows not found for missing path" {
   # Register a package pointing to a nonexistent path
-  shiv_register "gone" "/tmp/nonexistent-repo-$$"
-  shiv_create_shim "gone" "/tmp/nonexistent-repo-$$"
+  local missing_repo="$TEST_HOME/nonexistent-repo"
+  shiv_register "gone" "$missing_repo"
+  shiv_create_shim "gone" "$missing_repo"
 
   run run_uninstall "gone" "true"
   [ "$status" -eq 0 ]

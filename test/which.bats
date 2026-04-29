@@ -7,7 +7,7 @@ load helpers
 setup() {
   source "$REPO_DIR/lib/shim.sh"
 
-  export TEST_HOME="$BATS_TMPDIR/shiv-test-$$"
+  export TEST_HOME="$BATS_TEST_TMPDIR/shiv"
   mkdir -p "$TEST_HOME"
 
   export SHIV_BIN_DIR="$TEST_HOME/.local/bin"
@@ -25,9 +25,6 @@ setup() {
   create_fake_mise "$MISE_BIN"
 }
 
-teardown() {
-  rm -rf "$TEST_HOME"
-}
 
 create_fake_mise() {
   local fake_mise="$1"
