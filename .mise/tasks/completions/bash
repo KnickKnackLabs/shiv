@@ -23,13 +23,110 @@ __shiv_rebuild_cache() {
   fi
 }
 
+__shiv_installed_packages() {
+  local include_aliases="${1:-}"
+  local registry="${SHIV_REGISTRY:-${XDG_CONFIG_HOME:-$HOME/.config}/shiv/registry.json}"
+  local packages_dir="${SHIV_PACKAGES_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/shiv/packages}"
+
+  if [ -f "$registry" ] && command -v jq >/dev/null 2>&1; then
+    if [ "$include_aliases" = "--include-aliases" ]; then
+      jq -r 'keys[], (.[] .aliases? // [] | .[])' "$registry" 2>/dev/null | sort -u
+    else
+      jq -r 'keys[]' "$registry" 2>/dev/null | sort -u
+    fi
+    return 0
+  fi
+
+  if [ -d "$packages_dir" ]; then
+    find "$packages_dir" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; 2>/dev/null | sort -u
+  fi
+}
+
+__shiv_source_packages() {
+  local sources="${SHIV_SOURCES:-}"
+  local sources_dir="${SHIV_SOURCES_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/shiv/sources}"
+  local files=()
+  local sf
+
+  if [ -n "$sources" ]; then
+    IFS=',' read -ra files <<< "$sources"
+  fi
+
+  if [ -d "$sources_dir" ]; then
+    for sf in "$sources_dir"/*.json; do
+      [ -f "$sf" ] || continue
+      files+=("$sf")
+    done
+  fi
+
+  if [ -n "${__SHIV_REPO_SOURCES:-}" ] && [ -f "$__SHIV_REPO_SOURCES" ]; then
+    files+=("$__SHIV_REPO_SOURCES")
+  fi
+
+  {
+    for sf in ${files[@]+"${files[@]}"}; do
+      sf="${sf## }"
+      sf="${sf%% }"
+      [ -f "$sf" ] || continue
+      jq -r 'keys[]' "$sf" 2>/dev/null
+    done
+  } | sort -u | comm -23 - <(__shiv_installed_packages)
+}
+
 HEADER
+
+printf '__SHIV_REPO_SOURCES=%q\n\n' "$MISE_CONFIG_ROOT/sources.json"
 
 # Emit completion function for a command name pointing at a repo
 _shiv_emit_bash_completion() {
   local cmd="$1" name="$2" repo="$3"
   local cache_file="$CACHE_BASE/$name.cache"
   local func_name="${cmd//[^a-zA-Z0-9_]/_}"
+
+  if [ "$cmd" = "shiv" ]; then
+    cat <<EOF
+_shiv_complete_${func_name}() {
+  local cache="${cache_file}"
+  local cur="\${COMP_WORDS[COMP_CWORD]}"
+  local subcmd=""
+
+  if [ "\$COMP_CWORD" -ge 1 ]; then
+    subcmd="\${COMP_WORDS[1]}"
+  fi
+
+  case "\$COMP_CWORD:\$subcmd" in
+    2:which|2:update)
+      local candidates=""
+      local matches=""
+      if [ -n "\$cur" ]; then
+        candidates="\$(__shiv_installed_packages --include-aliases)"
+      else
+        candidates="\$(__shiv_installed_packages)"
+      fi
+      matches="\$(compgen -W "\$candidates" -- "\$cur")" || matches=""
+      COMPREPLY=( \$matches )
+      return
+      ;;
+    2:install)
+      local matches=""
+      matches="\$(compgen -W "\$(__shiv_source_packages)" -- "\$cur")" || matches=""
+      COMPREPLY=( \$matches )
+      return
+      ;;
+  esac
+
+  if [[ ! -s "\$cache" ]]; then
+    __shiv_rebuild_cache "$name" "$repo" "\$cache"
+  fi
+  if [[ -f "\$cache" && "\$COMP_CWORD" -eq 1 ]]; then
+    COMPREPLY=( \$(compgen -W "\$(cut -f1 "\$cache")" -- "\$cur") )
+  fi
+}
+complete -F _shiv_complete_${func_name} ${cmd}
+
+EOF
+    return
+  fi
 
   cat <<EOF
 _shiv_complete_${func_name}() {
