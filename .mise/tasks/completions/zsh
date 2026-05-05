@@ -31,7 +31,7 @@ __shiv_installed_packages() {
   local packages_dir="${SHIV_PACKAGES_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/shiv/packages}"
 
   if [ -f "$registry" ] && command -v jq >/dev/null 2>&1; then
-    jq -r 'keys[]' "$registry" 2>/dev/null | sort -u
+    jq -r 'keys[], (.[] .aliases? // [] | .[])' "$registry" 2>/dev/null | sort -u
     return 0
   fi
 

@@ -132,8 +132,8 @@ setup() {
   [[ " ${COMPREPLY[*]} " != *" install "* ]]
 }
 
-@test "bash: shiv update completes installed packages by prefix" {
-  shiv_register "alpha" "$REPO_DIR"
+@test "bash: shiv update completes installed packages and aliases by prefix" {
+  shiv_register "alpha" "$REPO_DIR" "a-tool"
   shiv_register "bravo" "$REPO_DIR"
   shiv_cache_tasks "shiv" "$REPO_DIR"
 
@@ -144,6 +144,7 @@ setup() {
   _shiv_complete_shiv
 
   [[ " ${COMPREPLY[*]} " == *" alpha "* ]]
+  [[ " ${COMPREPLY[*]} " == *" a-tool "* ]]
   [[ " ${COMPREPLY[*]} " != *" bravo "* ]]
 }
 

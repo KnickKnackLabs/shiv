@@ -43,7 +43,7 @@ function __shiv_installed_packages
   end
 
   if test -f "$registry"; and command -q jq
-    jq -r 'keys[]' "$registry" 2>/dev/null | sort -u
+    jq -r 'keys[], (.[] .aliases? // [] | .[])' "$registry" 2>/dev/null | sort -u
   else if test -d "$packages_dir"
     find "$packages_dir" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; 2>/dev/null | sort -u
   end
