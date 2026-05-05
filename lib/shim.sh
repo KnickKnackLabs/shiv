@@ -16,9 +16,22 @@ SHIV_DATA_DIR="${SHIV_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/shiv}"
 SHIV_PACKAGES_DIR="${SHIV_PACKAGES_DIR:-$SHIV_DATA_DIR/packages}"
 
 # Create a shim for a tool
+shiv_caller_pwd_var_name() {
+  local name="$1"
+  local var
+  var=$(printf '%s' "$name" | tr '[:lower:]' '[:upper:]' | sed 's/[^A-Z0-9_]/_/g')
+  case "$var" in
+    [A-Z_]*) ;;
+    *) var="_$var" ;;
+  esac
+  printf '%s_CALLER_PWD\n' "$var"
+}
+
 shiv_create_shim() {
   local name="$1" repo_dir="$2"
   local default_task=""
+  local caller_pwd_var
+  caller_pwd_var=$(shiv_caller_pwd_var_name "$name")
 
   # At install time, detect a default task for single-command tools.
   # Checks .mise/tasks/<name> first, then .mise/tasks/_default.
@@ -121,7 +134,7 @@ RESOLVE
 
 # --- main ---
 _shiv_check_repo
-export CALLER_PWD="\$PWD"
+export ${caller_pwd_var}="\$PWD"
 _shiv_check_cwd "\$@"
 
 case "\${1:-}" in
