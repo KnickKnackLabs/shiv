@@ -116,6 +116,85 @@ setup() {
   [ -f "$SHIV_CACHE_DIR/completions/shiv.cache" ]
 }
 
+@test "bash: shiv which completes installed packages" {
+  shiv_register "alpha" "$REPO_DIR"
+  shiv_register "bravo" "$REPO_DIR"
+  shiv_cache_tasks "shiv" "$REPO_DIR"
+
+  eval "$(mise -C "$REPO_DIR" run -q completions:bash)"
+  COMP_WORDS=(shiv which "")
+  COMP_CWORD=2
+  COMPREPLY=()
+  _shiv_complete_shiv
+
+  [[ " ${COMPREPLY[*]} " == *" alpha "* ]]
+  [[ " ${COMPREPLY[*]} " == *" bravo "* ]]
+  [[ " ${COMPREPLY[*]} " != *" install "* ]]
+}
+
+@test "bash: shiv update completes installed packages by prefix" {
+  shiv_register "alpha" "$REPO_DIR"
+  shiv_register "bravo" "$REPO_DIR"
+  shiv_cache_tasks "shiv" "$REPO_DIR"
+
+  eval "$(mise -C "$REPO_DIR" run -q completions:bash)"
+  COMP_WORDS=(shiv update "a")
+  COMP_CWORD=2
+  COMPREPLY=()
+  _shiv_complete_shiv
+
+  [[ " ${COMPREPLY[*]} " == *" alpha "* ]]
+  [[ " ${COMPREPLY[*]} " != *" bravo "* ]]
+}
+
+@test "bash: shiv update omits aliases from empty completion list" {
+  shiv_register "alpha" "$REPO_DIR" "a-tool"
+  shiv_cache_tasks "shiv" "$REPO_DIR"
+
+  eval "$(mise -C "$REPO_DIR" run -q completions:bash)"
+  COMP_WORDS=(shiv update "")
+  COMP_CWORD=2
+  COMPREPLY=()
+  _shiv_complete_shiv
+
+  [[ " ${COMPREPLY[*]} " == *" alpha "* ]]
+  [[ " ${COMPREPLY[*]} " != *" a-tool "* ]]
+}
+
+@test "bash: shiv update includes aliases after prefix is typed" {
+  shiv_register "alpha" "$REPO_DIR" "a-tool"
+  shiv_register "bravo" "$REPO_DIR"
+  shiv_cache_tasks "shiv" "$REPO_DIR"
+
+  eval "$(mise -C "$REPO_DIR" run -q completions:bash)"
+  COMP_WORDS=(shiv update "a")
+  COMP_CWORD=2
+  COMPREPLY=()
+  _shiv_complete_shiv
+
+  [[ " ${COMPREPLY[*]} " == *" alpha "* ]]
+  [[ " ${COMPREPLY[*]} " == *" a-tool "* ]]
+  [[ " ${COMPREPLY[*]} " != *" bravo "* ]]
+}
+
+@test "bash: shiv install completes only uninstalled source packages" {
+  mkdir -p "$SHIV_SOURCES_DIR"
+  cat > "$SHIV_SOURCES_DIR/test.json" <<JSON
+{"aardvark-test":"KnickKnackLabs/aardvark-test","zebra-test":"KnickKnackLabs/zebra-test"}
+JSON
+  shiv_register "zebra-test" "$REPO_DIR"
+  shiv_cache_tasks "shiv" "$REPO_DIR"
+
+  eval "$(mise -C "$REPO_DIR" run -q completions:bash)"
+  COMP_WORDS=(shiv install "")
+  COMP_CWORD=2
+  COMPREPLY=()
+  _shiv_complete_shiv
+
+  [[ " ${COMPREPLY[*]} " == *" aardvark-test "* ]]
+  [[ " ${COMPREPLY[*]} " != *" zebra-test "* ]]
+}
+
 # ============================================================================
 # Zsh completions
 # ============================================================================
@@ -140,6 +219,15 @@ setup() {
   [ "$status" -eq 0 ]
   # The escaping logic should be present
   echo "$output" | grep -qF 'task//:/\\:'
+}
+
+@test "zsh: shiv command completion has package subcommand branches" {
+  shiv_cache_tasks "shiv" "$REPO_DIR"
+  run mise -C "$REPO_DIR" run -q completions:zsh
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q "__shiv_installed_packages"
+  echo "$output" | grep -q "__shiv_source_packages"
+  echo "$output" | grep -q "which|update"
 }
 
 @test "zsh: valid syntax" {
@@ -168,6 +256,15 @@ setup() {
   run mise -C "$REPO_DIR" run -q completions:fish
   [ "$status" -eq 0 ]
   echo "$output" | grep -q "__shiv_rebuild_cache"
+}
+
+@test "fish: shiv command completion has package subcommand branches" {
+  shiv_cache_tasks "shiv" "$REPO_DIR"
+  run mise -C "$REPO_DIR" run -q completions:fish
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q "__shiv_installed_packages"
+  echo "$output" | grep -q "__shiv_source_packages"
+  echo "$output" | grep -q "__fish_seen_subcommand_from which update"
 }
 
 @test "fish: valid syntax" {

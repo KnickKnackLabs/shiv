@@ -23,12 +23,97 @@ function __shiv_rebuild_cache
     > "$cache" 2>/dev/null; or true
 end
 
+function __shiv_installed_packages
+  set -l include_aliases "$argv[1]"
+  set -l registry "$SHIV_REGISTRY"
+  if test -z "$registry"
+    if test -n "$XDG_CONFIG_HOME"
+      set registry "$XDG_CONFIG_HOME/shiv/registry.json"
+    else
+      set registry "$HOME/.config/shiv/registry.json"
+    end
+  end
+
+  set -l packages_dir "$SHIV_PACKAGES_DIR"
+  if test -z "$packages_dir"
+    if test -n "$XDG_DATA_HOME"
+      set packages_dir "$XDG_DATA_HOME/shiv/packages"
+    else
+      set packages_dir "$HOME/.local/share/shiv/packages"
+    end
+  end
+
+  if test -f "$registry"; and command -q jq
+    if test "$include_aliases" = "--include-aliases"
+      jq -r 'keys[], (.[] .aliases? // [] | .[])' "$registry" 2>/dev/null | sort -u
+    else
+      jq -r 'keys[]' "$registry" 2>/dev/null | sort -u
+    end
+  else if test -d "$packages_dir"
+    find "$packages_dir" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; 2>/dev/null | sort -u
+  end
+end
+
+function __shiv_source_packages
+  begin
+    if test -n "$SHIV_SOURCES"
+      for sf in (string split "," "$SHIV_SOURCES")
+        set sf (string trim "$sf")
+        test -f "$sf"; or continue
+        jq -r 'keys[]' "$sf" 2>/dev/null
+      end
+    end
+
+    set -l sources_dir "$SHIV_SOURCES_DIR"
+    if test -z "$sources_dir"
+      if test -n "$XDG_CONFIG_HOME"
+        set sources_dir "$XDG_CONFIG_HOME/shiv/sources"
+      else
+        set sources_dir "$HOME/.config/shiv/sources"
+      end
+    end
+
+    if test -d "$sources_dir"
+      for sf in "$sources_dir"/*.json
+        test -f "$sf"; or continue
+        jq -r 'keys[]' "$sf" 2>/dev/null
+      end
+    end
+
+    if test -n "$__SHIV_REPO_SOURCES"; and test -f "$__SHIV_REPO_SOURCES"
+      jq -r 'keys[]' "$__SHIV_REPO_SOURCES" 2>/dev/null
+    end
+  end | sort -u | comm -23 - (__shiv_installed_packages | psub)
+end
+
 HEADER
+
+printf 'set -g __SHIV_REPO_SOURCES %q\n\n' "$MISE_CONFIG_ROOT/sources.json"
 
 # Emit completion block for a command name pointing at a repo
 _shiv_emit_fish_completion() {
   local cmd="$1" name="$2" repo="$3"
   local cache_file="$CACHE_BASE/$name.cache"
+
+  if [ "$cmd" = "shiv" ]; then
+    cat <<EOF
+# completions for: ${cmd}
+complete -c ${cmd} -f -n 'not __fish_seen_subcommand_from install update which' -a '(begin
+  set -l cache "${cache_file}"
+  if not test -s "\$cache"
+    __shiv_rebuild_cache "$name" "$repo" "\$cache"
+  end
+  if test -f "\$cache"
+    cat "\$cache"
+  end
+end)'
+complete -c ${cmd} -f -n '__fish_seen_subcommand_from which update; and test -z (commandline -ct)' -a '(__shiv_installed_packages)'
+complete -c ${cmd} -f -n '__fish_seen_subcommand_from which update; and test -n (commandline -ct)' -a '(__shiv_installed_packages --include-aliases)'
+complete -c ${cmd} -f -n '__fish_seen_subcommand_from install' -a '(__shiv_source_packages)'
+
+EOF
+    return
+  fi
 
   cat <<EOF
 # completions for: ${cmd}
