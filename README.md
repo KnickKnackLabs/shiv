@@ -47,7 +47,7 @@ When you run `shiv install foo`, shiv:
 4. Generates a shim at `~/.local/bin/foo`
 5. Registers the package in `~/.config/shiv/registry.json`
 
-The shim is a bash script that forwards commands to `mise -C <repo> run`. It exports `CALLER_PWD` so tools know where you invoked them, translates space-separated arguments to colon-joined task names (`agent message` → `agent:message`), and provides tab completions for all available tasks.
+The shim is a bash script that forwards commands to `mise -C <repo> run`. It exports a package-specific caller variable (for example, `SHIMMER_CALLER_PWD` for `shimmer`) so tools know where you invoked them, translates space-separated arguments to colon-joined task names (`agent message` → `agent:message`), and provides tab completions for all available tasks.
 
 ## Install
 

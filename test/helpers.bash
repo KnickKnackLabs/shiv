@@ -8,7 +8,7 @@ setup_shiv_on_path() {
   mkdir -p "$mock_bin"
   cat > "$mock_bin/shiv" <<MOCK
 #!/usr/bin/env bash
-export CALLER_PWD="\$PWD"
+export SHIV_CALLER_PWD="\$PWD"
 exec mise -C "$REPO_DIR" run -q "\$@"
 MOCK
   chmod +x "$mock_bin/shiv"

@@ -96,7 +96,7 @@ shiv doctor`}</CodeBlock>
       <Paragraph>
         The shim is a bash script that forwards commands to{" "}
         <Code>{"mise -C <repo> run"}</Code>. It exports{" "}
-        <Code>CALLER_PWD</Code> so tools know where you invoked them,
+        a package-specific caller variable (for example, <Code>SHIMMER_CALLER_PWD</Code>) so tools know where you invoked them,
         translates space-separated arguments to colon-joined task names
         (<Code>agent message</Code> → <Code>agent:message</Code>),
         and provides tab completions for all available tasks.

@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# Shim runtime behavior tests — CALLER_PWD propagation, default task, etc.
+# Shim runtime behavior tests — <PACKAGE>_CALLER_PWD propagation, default task, etc.
 
 REPO_DIR="$BATS_TEST_DIRNAME/.."
 load helpers
@@ -25,7 +25,7 @@ setup() {
 }
 
 
-# Helper: create a repo with a task that echoes CALLER_PWD
+# Helper: create a repo with a task that echoes MYAPP_CALLER_PWD
 create_caller_repo() {
   local name="$1"
   local repo_dir="$TEST_HOME/repos/$name"
@@ -39,8 +39,8 @@ create_caller_repo() {
 
   cat > "$repo_dir/.mise/tasks/show-caller" <<'TASK'
 #!/usr/bin/env bash
-#MISE description="Print CALLER_PWD"
-echo "$CALLER_PWD"
+#MISE description="Print MYAPP_CALLER_PWD"
+echo "$MYAPP_CALLER_PWD"
 TASK
   chmod +x "$repo_dir/.mise/tasks/show-caller"
 
@@ -49,24 +49,25 @@ TASK
   mise trust "$repo_dir/mise.toml" 2>/dev/null
 
   mkdir -p "$SHIV_CACHE_DIR/completions"
-  printf 'show-caller\tPrint CALLER_PWD\n' > "$SHIV_CACHE_DIR/completions/$name.cache"
+  printf 'show-caller\tPrint MYAPP_CALLER_PWD\n' > "$SHIV_CACHE_DIR/completions/$name.cache"
 
   echo "$repo_dir"
 }
 
 # ============================================================================
-# CALLER_PWD propagation
+# <PACKAGE>_CALLER_PWD propagation
 # ============================================================================
 
-@test "shim: template uses unconditional CALLER_PWD assignment" {
+@test "shim: template uses unconditional package-specific caller assignment" {
   local repo_dir
   repo_dir=$(create_caller_repo "myapp")
   shiv install myapp "$repo_dir" 2>/dev/null
 
-  grep -q 'CALLER_PWD="$PWD"' "$SHIV_BIN_DIR/myapp"
+  grep -q 'MYAPP_CALLER_PWD="$PWD"' "$SHIV_BIN_DIR/myapp"
+  ! grep -q 'export CALLER_PWD=' "$SHIV_BIN_DIR/myapp"
 }
 
-@test "shim: CALLER_PWD reflects actual cwd" {
+@test "shim: package-specific caller var reflects actual cwd" {
   local repo_dir
   repo_dir=$(create_caller_repo "myapp")
   shiv install myapp "$repo_dir" 2>/dev/null
@@ -76,13 +77,41 @@ TASK
   [[ "$output" == *"/tmp"* ]]
 }
 
-@test "shim: CALLER_PWD overrides stale value from environment" {
+@test "shim: package-specific caller var overrides stale value from environment" {
   local repo_dir
   repo_dir=$(create_caller_repo "myapp")
   shiv install myapp "$repo_dir" 2>/dev/null
 
-  # Even if CALLER_PWD is set in the environment, the shim should use $PWD
-  run bash -c "export CALLER_PWD='/some/stale/dir' && cd /tmp && '$SHIV_BIN_DIR/myapp' show-caller"
+  # Even if MYAPP_CALLER_PWD is set in the environment, the shim should use $PWD
+  run bash -c "export MYAPP_CALLER_PWD='/some/stale/dir' && cd /tmp && '$SHIV_BIN_DIR/myapp' show-caller"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"/tmp"* ]]
+}
+
+@test "shim: caller var name is sanitized from package name" {
+  local repo_dir="$TEST_HOME/repos/my-tool"
+
+  mkdir -p "$repo_dir/.mise/tasks"
+  git -C "$repo_dir" init -q -b main
+  git -C "$repo_dir" config user.email "test@test.com"
+  git -C "$repo_dir" config user.name "Test"
+  echo '[tools]' > "$repo_dir/mise.toml"
+  cat > "$repo_dir/.mise/tasks/show-caller" <<'TASK'
+#!/usr/bin/env bash
+#MISE description="Print MY_TOOL_CALLER_PWD"
+echo "$MY_TOOL_CALLER_PWD"
+TASK
+  chmod +x "$repo_dir/.mise/tasks/show-caller"
+  git -C "$repo_dir" add .
+  git -C "$repo_dir" commit -q -m "init"
+  mise trust "$repo_dir/mise.toml" 2>/dev/null
+  mkdir -p "$SHIV_CACHE_DIR/completions"
+  printf 'show-caller\tPrint MY_TOOL_CALLER_PWD\n' > "$SHIV_CACHE_DIR/completions/my-tool.cache"
+
+  shiv install my-tool "$repo_dir" 2>/dev/null
+
+  grep -q 'MY_TOOL_CALLER_PWD="$PWD"' "$SHIV_BIN_DIR/my-tool"
+  run bash -c "cd /tmp && '$SHIV_BIN_DIR/my-tool' show-caller"
   [ "$status" -eq 0 ]
   [[ "$output" == *"/tmp"* ]]
 }
