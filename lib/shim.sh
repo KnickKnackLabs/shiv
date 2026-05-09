@@ -49,6 +49,13 @@ shiv_create_shim() {
     has_tasks_task="true"
   fi
 
+  # At install time, detect if the package has its own 'help' task.
+  # If present, the shim routes `--help`, `-h`, and `help` there.
+  local has_help_task=""
+  if [ -f "$repo_dir/.mise/tasks/help" ]; then
+    has_help_task="true"
+  fi
+
   mkdir -p "$SHIV_BIN_DIR"
 
   # Build the shim in three parts:
@@ -63,6 +70,7 @@ shiv_create_shim() {
 REPO="$repo_dir"
 DEFAULT_TASK="${default_task}"
 HAS_TASKS_TASK="${has_tasks_task}"
+HAS_HELP_TASK="${has_help_task}"
 SHIV_TASK_MAP="\${XDG_CACHE_HOME:-\$HOME/.cache}/shiv/tasks/$name"
 
 _shiv_check_repo() {
@@ -117,6 +125,29 @@ _shiv_handle_tasks() {
   exit \$rc
 }
 
+_shiv_handle_help() {
+  local help_arg="\${1:-help}"
+
+  # Package-owned help wins. This lets tools expose richer help than the
+  # generic mise task list while keeping the shim-level interception.
+  if [ "\$HAS_HELP_TASK" = "true" ]; then
+    exec mise -C "\$REPO" run -q help
+  fi
+
+  # Single-command tools (.mise/tasks/<name>) should show the command help,
+  # not the package task list. Do not do this for _default: those are often
+  # menus/catch-alls where task-list help is still the safer default.
+  if [ -n "\$DEFAULT_TASK" ] && [ "\$DEFAULT_TASK" != "_default" ]; then
+    if [ "\$help_arg" = "help" ]; then
+      exec mise -C "\$REPO" run -q "\$DEFAULT_TASK" help
+    else
+      exec mise -C "\$REPO" run -q "\$DEFAULT_TASK" "\$help_arg"
+    fi
+  fi
+
+  exec mise -C "\$REPO" tasks
+}
+
 SCRIPT
 
   {
@@ -139,7 +170,7 @@ _shiv_check_cwd "\$@"
 
 case "\${1:-}" in
   --help|-h|help)
-    exec mise -C "\$REPO" tasks
+    _shiv_handle_help "\${1:-help}"
     ;;
   tasks)
     _shiv_handle_tasks "\$@"

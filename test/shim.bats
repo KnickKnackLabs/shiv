@@ -154,6 +154,85 @@ TASK
 }
 
 # ============================================================================
+# help interception
+# ============================================================================
+
+create_named_default_repo() {
+  local name="$1"
+  local repo_dir="$TEST_HOME/repos/$name"
+
+  mkdir -p "$repo_dir/.mise/tasks"
+  git -C "$repo_dir" init -q -b main
+  git -C "$repo_dir" config user.email "test@test.com"
+  git -C "$repo_dir" config user.name "Test"
+
+  echo '[tools]' > "$repo_dir/mise.toml"
+
+  cat > "$repo_dir/.mise/tasks/$name" <<'TASK'
+#!/usr/bin/env bash
+#MISE description="Named default command"
+#USAGE arg "[message]" help="Message to print"
+echo "NAMED_DEFAULT $*"
+TASK
+  chmod +x "$repo_dir/.mise/tasks/$name"
+
+  git -C "$repo_dir" add .
+  git -C "$repo_dir" commit -q -m "init"
+  mise trust "$repo_dir/mise.toml" 2>/dev/null
+
+  echo "$repo_dir"
+}
+
+@test "shim: --help routes to named default task help" {
+  local repo_dir
+  repo_dir=$(create_named_default_repo "myapp")
+  shiv install myapp "$repo_dir" 2>/dev/null
+
+  run "$SHIV_BIN_DIR/myapp" --help
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Message to print"* ]]
+  [[ "$output" != *"show-caller"* ]]
+}
+
+@test "shim: package help task handles --help when present" {
+  local repo_dir
+  repo_dir=$(create_caller_repo "myapp")
+
+  cat > "$repo_dir/.mise/tasks/help" <<'TASK'
+#!/usr/bin/env bash
+#MISE description="Package help"
+echo "PACKAGE_HELP_OUTPUT"
+TASK
+  chmod +x "$repo_dir/.mise/tasks/help"
+  git -C "$repo_dir" add . && git -C "$repo_dir" commit -q -m "add help task"
+
+  shiv install myapp "$repo_dir" 2>/dev/null
+
+  run "$SHIV_BIN_DIR/myapp" --help
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"PACKAGE_HELP_OUTPUT"* ]]
+}
+
+@test "shim: package help task handles help subcommand when present" {
+  local repo_dir
+  repo_dir=$(create_caller_repo "myapp")
+
+  cat > "$repo_dir/.mise/tasks/help" <<'TASK'
+#!/usr/bin/env bash
+#MISE description="Package help"
+echo "PACKAGE_HELP_OUTPUT"
+TASK
+  chmod +x "$repo_dir/.mise/tasks/help"
+  git -C "$repo_dir" add . && git -C "$repo_dir" commit -q -m "add help task"
+
+  shiv install myapp "$repo_dir" 2>/dev/null
+
+  run "$SHIV_BIN_DIR/myapp" help
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"PACKAGE_HELP_OUTPUT"* ]]
+}
+
+# ============================================================================
 # Space-to-colon resolution (integration)
 # ============================================================================
 
