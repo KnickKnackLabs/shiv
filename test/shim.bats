@@ -188,6 +188,37 @@ TASK
   [[ "$output" != *"Parent task should not leak"* ]]
 }
 
+@test "shim: tasks without jq fails closed instead of leaking parent tasks" {
+  local repo_dir parent_dir bin_dir
+  repo_dir=$(create_caller_repo "myapp")
+  parent_dir=$(dirname "$repo_dir")
+
+  mkdir -p "$parent_dir/.mise/tasks"
+  echo '[tools]' > "$parent_dir/mise.toml"
+  cat > "$parent_dir/.mise/tasks/parent-task" <<'TASK'
+#!/usr/bin/env bash
+#MISE description="Parent task should not leak"
+echo parent
+TASK
+  chmod +x "$parent_dir/.mise/tasks/parent-task"
+  mise trust "$parent_dir/mise.toml" 2>/dev/null
+
+  shiv install myapp "$repo_dir" 2>/dev/null
+
+  bin_dir="$BATS_TEST_TMPDIR/no-jq-bin"
+  mkdir -p "$bin_dir"
+  ln -s "$(command -v mise)" "$bin_dir/mise"
+  ln -s "$(command -v env)" "$bin_dir/env"
+  ln -s "$(command -v bash)" "$bin_dir/bash"
+  ln -s "$(command -v basename)" "$bin_dir/basename"
+
+  run env PATH="$bin_dir" "$SHIV_BIN_DIR/myapp" tasks
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"jq not found"* ]]
+  [[ "$output" != *"parent-task"* ]]
+  [[ "$output" != *"Parent task should not leak"* ]]
+}
+
 @test "shim: 'tasks' runs the package's tasks task when one exists" {
   local repo_dir
   repo_dir=$(create_caller_repo "myapp")
