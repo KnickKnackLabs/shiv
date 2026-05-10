@@ -120,15 +120,72 @@ TASK
 # tasks interception
 # ============================================================================
 
-@test "shim: 'tasks' lists available tasks when no tasks task exists" {
+@test "shim: 'tasks' lists available local tasks in formatted output" {
   local repo_dir
   repo_dir=$(create_caller_repo "myapp")
   shiv install myapp "$repo_dir" 2>/dev/null
 
   run "$SHIV_BIN_DIR/myapp" tasks
   [ "$status" -eq 0 ]
+  [[ "$output" == *"Group"* ]]
+  [[ "$output" == *"Task"* ]]
+  [[ "$output" == *"Aliases"* ]]
+  [[ "$output" == *"Description"* ]]
+  [[ "$output" == *"root"* ]]
   [[ "$output" == *"show-caller"* ]]
+  [[ "$output" == *"Print MYAPP_CALLER_PWD"* ]]
+  [[ "$output" != *"mise-config"* ]]
   [[ "$output" == *"override"* ]]
+}
+
+@test "shim: 'tasks' excludes parent mise tasks" {
+  local repo_dir parent_dir
+  repo_dir=$(create_caller_repo "myapp")
+  parent_dir=$(dirname "$repo_dir")
+
+  mkdir -p "$parent_dir/.mise/tasks"
+  echo '[tools]' > "$parent_dir/mise.toml"
+  cat > "$parent_dir/.mise/tasks/parent-task" <<'TASK'
+#!/usr/bin/env bash
+#MISE description="Parent task should not leak"
+echo parent
+TASK
+  chmod +x "$parent_dir/.mise/tasks/parent-task"
+  mise trust "$parent_dir/mise.toml" 2>/dev/null
+
+  shiv install myapp "$repo_dir" 2>/dev/null
+
+  run "$SHIV_BIN_DIR/myapp" tasks
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"show-caller"* ]]
+  [[ "$output" != *"parent-task"* ]]
+  [[ "$output" != *"Parent task should not leak"* ]]
+}
+
+@test "shim: --help without package help renders only package-local tasks" {
+  local repo_dir parent_dir
+  repo_dir=$(create_caller_repo "myapp")
+  parent_dir=$(dirname "$repo_dir")
+
+  mkdir -p "$parent_dir/.mise/tasks"
+  echo '[tools]' > "$parent_dir/mise.toml"
+  cat > "$parent_dir/.mise/tasks/parent-task" <<'TASK'
+#!/usr/bin/env bash
+#MISE description="Parent task should not leak"
+echo parent
+TASK
+  chmod +x "$parent_dir/.mise/tasks/parent-task"
+  mise trust "$parent_dir/mise.toml" 2>/dev/null
+
+  shiv install myapp "$repo_dir" 2>/dev/null
+
+  run "$SHIV_BIN_DIR/myapp" --help
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Group"* ]]
+  [[ "$output" == *"Task"* ]]
+  [[ "$output" == *"show-caller"* ]]
+  [[ "$output" != *"parent-task"* ]]
+  [[ "$output" != *"Parent task should not leak"* ]]
 }
 
 @test "shim: 'tasks' runs the package's tasks task when one exists" {
@@ -232,6 +289,19 @@ TASK
   [[ "$output" == *"PACKAGE_HELP_OUTPUT"* ]]
 }
 
+@test "shim: --help falls back to formatted local task list" {
+  local repo_dir
+  repo_dir=$(create_caller_repo "myapp")
+  shiv install myapp "$repo_dir" 2>/dev/null
+
+  run "$SHIV_BIN_DIR/myapp" --help
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Group"* ]]
+  [[ "$output" == *"Task"* ]]
+  [[ "$output" == *"show-caller"* ]]
+  [[ "$output" != *"mise-config"* ]]
+}
+
 # ============================================================================
 # Space-to-colon resolution (integration)
 # ============================================================================
@@ -302,6 +372,19 @@ populate_task_map() {
   run "$SHIV_BIN_DIR/mytool" dev test unit
   [ "$status" -eq 0 ]
   [[ "$output" == *"DEV_TEST_UNIT"* ]]
+}
+
+@test "shim: tasks groups colon-namespaced tasks" {
+  local repo_dir
+  repo_dir=$(create_resolve_repo "mytool")
+  shiv install mytool "$repo_dir" 2>/dev/null
+
+  run "$SHIV_BIN_DIR/mytool" tasks
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Group"* ]]
+  [[ "$output" == *"root"*"greet"* ]]
+  [[ "$output" == *"greet"*"loud"* ]]
+  [[ "$output" == *"dev"*"test:unit"* ]]
 }
 
 @test "shim: spaces resolve with remaining args passed through" {
