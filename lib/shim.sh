@@ -120,7 +120,8 @@ _shiv_render_tasks_plain() {
 
 _shiv_render_tasks() {
   if ! command -v jq >/dev/null 2>&1; then
-    exec mise -C "\$REPO" tasks --local
+    echo "$name: jq not found, cannot render package-local task list" >&2
+    return 1
   fi
 
   local tmp repo_prefix
@@ -138,7 +139,8 @@ _shiv_render_tasks() {
       | [.group, .task, .aliases, .description]
       | @tsv' > "\$tmp" 2>/dev/null; then
     rm -f "\$tmp"
-    exec mise -C "\$REPO" tasks --local
+    echo "$name: failed to render package-local task list" >&2
+    return 1
   fi
 
   if [ ! -s "\$tmp" ]; then
