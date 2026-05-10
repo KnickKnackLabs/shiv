@@ -123,10 +123,11 @@ _shiv_render_tasks() {
     exec mise -C "\$REPO" tasks --local
   fi
 
-  local tmp
+  local tmp repo_prefix
   tmp=\$(mktemp)
+  repo_prefix="\${REPO%/}/"
   if ! mise -C "\$REPO" tasks --local --json 2>/dev/null \
-    | jq -r '.[] | select(.hide != true) | [.name, ((.aliases // []) | join(", ")), (.description // "")] | @tsv' > "\$tmp" 2>/dev/null; then
+    | jq -r --arg repo_prefix "\$repo_prefix" '.[] | select(.hide != true) | select(((.source // .file // "") | startswith(\$repo_prefix))) | [.name, ((.aliases // []) | join(", ")), (.description // "")] | @tsv' > "\$tmp" 2>/dev/null; then
     rm -f "\$tmp"
     exec mise -C "\$REPO" tasks --local
   fi
@@ -183,7 +184,8 @@ _shiv_handle_help() {
     fi
   fi
 
-  exec mise -C "\$REPO" tasks
+  _shiv_render_tasks
+  exit \$?
 }
 
 SCRIPT

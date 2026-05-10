@@ -136,6 +136,55 @@ TASK
   [[ "$output" == *"override"* ]]
 }
 
+@test "shim: 'tasks' excludes parent mise tasks" {
+  local repo_dir parent_dir
+  repo_dir=$(create_caller_repo "myapp")
+  parent_dir=$(dirname "$repo_dir")
+
+  mkdir -p "$parent_dir/.mise/tasks"
+  echo '[tools]' > "$parent_dir/mise.toml"
+  cat > "$parent_dir/.mise/tasks/parent-task" <<'TASK'
+#!/usr/bin/env bash
+#MISE description="Parent task should not leak"
+echo parent
+TASK
+  chmod +x "$parent_dir/.mise/tasks/parent-task"
+  mise trust "$parent_dir/mise.toml" 2>/dev/null
+
+  shiv install myapp "$repo_dir" 2>/dev/null
+
+  run "$SHIV_BIN_DIR/myapp" tasks
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"show-caller"* ]]
+  [[ "$output" != *"parent-task"* ]]
+  [[ "$output" != *"Parent task should not leak"* ]]
+}
+
+@test "shim: --help without package help renders only package-local tasks" {
+  local repo_dir parent_dir
+  repo_dir=$(create_caller_repo "myapp")
+  parent_dir=$(dirname "$repo_dir")
+
+  mkdir -p "$parent_dir/.mise/tasks"
+  echo '[tools]' > "$parent_dir/mise.toml"
+  cat > "$parent_dir/.mise/tasks/parent-task" <<'TASK'
+#!/usr/bin/env bash
+#MISE description="Parent task should not leak"
+echo parent
+TASK
+  chmod +x "$parent_dir/.mise/tasks/parent-task"
+  mise trust "$parent_dir/mise.toml" 2>/dev/null
+
+  shiv install myapp "$repo_dir" 2>/dev/null
+
+  run "$SHIV_BIN_DIR/myapp" --help
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Task"* ]]
+  [[ "$output" == *"show-caller"* ]]
+  [[ "$output" != *"parent-task"* ]]
+  [[ "$output" != *"Parent task should not leak"* ]]
+}
+
 @test "shim: 'tasks' runs the package's tasks task when one exists" {
   local repo_dir
   repo_dir=$(create_caller_repo "myapp")
