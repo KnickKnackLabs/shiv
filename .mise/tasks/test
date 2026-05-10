@@ -30,6 +30,7 @@ if ! $has_target; then
     [[ "$(basename "$f" .bats)" == "$EXCLUDE" ]] && continue
     args+=("$f")
   done
+  exec bats --jobs 8 --parallel-binary-name rush "${args[@]}"
 fi
 
-bats "${args[@]}"
+exec bats "${args[@]}"

@@ -114,11 +114,49 @@ _shiv_ensure_task_map() {
   fi
 }
 
+_shiv_render_tasks_plain() {
+  awk -F '\t' '{ printf "%-24s  %-16s  %s\n", \$1, \$2, \$3 }'
+}
+
+_shiv_render_tasks() {
+  if ! command -v jq >/dev/null 2>&1; then
+    exec mise -C "\$REPO" tasks --local
+  fi
+
+  local tmp
+  tmp=\$(mktemp)
+  if ! mise -C "\$REPO" tasks --local --json 2>/dev/null \
+    | jq -r '.[] | select(.hide != true) | [.name, ((.aliases // []) | join(", ")), (.description // "")] | @tsv' > "\$tmp" 2>/dev/null; then
+    rm -f "\$tmp"
+    exec mise -C "\$REPO" tasks --local
+  fi
+
+  if [ ! -s "\$tmp" ]; then
+    rm -f "\$tmp"
+    echo "No local tasks found."
+    return 0
+  fi
+
+  if command -v gum >/dev/null 2>&1 && [ -t 1 ]; then
+    {
+      printf 'Task\tAliases\tDescription\n'
+      cat "\$tmp"
+    } | gum table --print --separator \$'\t' --border rounded
+  else
+    {
+      printf 'Task\tAliases\tDescription\n'
+      cat "\$tmp"
+    } | _shiv_render_tasks_plain
+  fi
+
+  rm -f "\$tmp"
+}
+
 _shiv_handle_tasks() {
   if [ "\$HAS_TASKS_TASK" = "true" ]; then
     exec mise -C "\$REPO" run -q "\$@"
   fi
-  mise -C "\$REPO" tasks
+  _shiv_render_tasks
   local rc=\$?
   echo "" >&2
   echo "To override this output, create .mise/tasks/tasks in the package and reinstall." >&2
