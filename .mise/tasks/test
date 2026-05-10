@@ -25,11 +25,14 @@ for arg in "$@"; do
   fi
 done
 
+bats_args=()
+
 if ! $has_target; then
   for f in "$TEST_DIR"/*.bats; do
     [[ "$(basename "$f" .bats)" == "$EXCLUDE" ]] && continue
     args+=("$f")
   done
+  bats_args+=(--jobs 8 --parallel-binary-name rush)
 fi
 
-bats "${args[@]}"
+exec bats ${bats_args[@]+"${bats_args[@]}"} ${args[@]+"${args[@]}"}

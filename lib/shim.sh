@@ -114,11 +114,61 @@ _shiv_ensure_task_map() {
   fi
 }
 
+_shiv_render_tasks_plain() {
+  awk -F '\t' '{ printf "%-12s  %-24s  %-16s  %s\n", \$1, \$2, \$3, \$4 }'
+}
+
+_shiv_render_tasks() {
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "$name: jq not found, cannot render package-local task list" >&2
+    return 1
+  fi
+
+  local tmp repo_prefix
+  tmp=\$(mktemp)
+  repo_prefix="\$(cd "\$REPO" && pwd -P)/"
+  if ! mise -C "\$REPO" tasks --local --json 2>/dev/null \
+    | jq -r --arg repo_prefix "\$repo_prefix" '[.[] | select(.hide != true) | select(((.source // .file // "") | startswith(\$repo_prefix))) | (.name | split(":")) as \$p | {
+        group: (if (\$p | length) > 1 then \$p[0] else "root" end),
+        task: (if (\$p | length) > 1 then (\$p[1:] | join(":")) else .name end),
+        aliases: ((.aliases // []) | join(", ")),
+        description: (.description // "")
+      }]
+      | sort_by((if .group == "root" then "" else .group end), .task)
+      | .[]
+      | [.group, .task, .aliases, .description]
+      | @tsv' > "\$tmp" 2>/dev/null; then
+    rm -f "\$tmp"
+    echo "$name: failed to render package-local task list" >&2
+    return 1
+  fi
+
+  if [ ! -s "\$tmp" ]; then
+    rm -f "\$tmp"
+    echo "No local tasks found."
+    return 0
+  fi
+
+  if command -v gum >/dev/null 2>&1 && [ -t 1 ]; then
+    {
+      printf 'Group\tTask\tAliases\tDescription\n'
+      cat "\$tmp"
+    } | gum table --print --separator \$'\t' --border rounded
+  else
+    {
+      printf 'Group\tTask\tAliases\tDescription\n'
+      cat "\$tmp"
+    } | _shiv_render_tasks_plain
+  fi
+
+  rm -f "\$tmp"
+}
+
 _shiv_handle_tasks() {
   if [ "\$HAS_TASKS_TASK" = "true" ]; then
     exec mise -C "\$REPO" run -q "\$@"
   fi
-  mise -C "\$REPO" tasks
+  _shiv_render_tasks
   local rc=\$?
   echo "" >&2
   echo "To override this output, create .mise/tasks/tasks in the package and reinstall." >&2
@@ -145,7 +195,7 @@ _shiv_handle_help() {
     fi
   fi
 
-  exec mise -C "\$REPO" tasks
+  _shiv_handle_tasks tasks
 }
 
 SCRIPT
