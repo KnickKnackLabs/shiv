@@ -183,7 +183,8 @@ _shiv_handle_help() {
     fi
   fi
 
-  exec mise -C "\$REPO" tasks
+  _shiv_render_tasks
+  exit \$?
 }
 
 SCRIPT

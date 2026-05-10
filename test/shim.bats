@@ -188,6 +188,21 @@ TASK
   echo "$repo_dir"
 }
 
+@test "shim: help lists available local tasks in formatted output" {
+  local repo_dir
+  repo_dir=$(create_caller_repo "myapp")
+  shiv install myapp "$repo_dir" 2>/dev/null
+
+  run "$SHIV_BIN_DIR/myapp" help
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Task"* ]]
+  [[ "$output" == *"Aliases"* ]]
+  [[ "$output" == *"Description"* ]]
+  [[ "$output" == *"show-caller"* ]]
+  [[ "$output" == *"Print MYAPP_CALLER_PWD"* ]]
+  [[ "$output" != *"mise-config"* ]]
+}
+
 @test "shim: --help routes to named default task help" {
   local repo_dir
   repo_dir=$(create_named_default_repo "myapp")
