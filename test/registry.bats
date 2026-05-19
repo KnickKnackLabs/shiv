@@ -226,6 +226,12 @@ setup() {
   jq -e '.foo.ref == "v1.0.0"' "$SHIV_REGISTRY"
 }
 
+@test "ref: register with ref mode stores update intent" {
+  SHIV_REF="v1.0.0" SHIV_REF_MODE="release" shiv_register "foo" "/path/to/foo"
+  jq -e '.foo.refMode == "release"' "$SHIV_REGISTRY"
+  [ "$(shiv_registry_ref_mode "foo")" = "release" ]
+}
+
 @test "ref: register without ref omits ref key" {
   shiv_register "foo" "/path/to/foo"
   run jq -e '.foo | has("ref")' "$SHIV_REGISTRY"
@@ -253,6 +259,20 @@ setup() {
   shiv_register "foo" "/path/to/foo"
   run jq -e '.foo | has("ref")' "$SHIV_REGISTRY"
   [ "$status" -ne 0 ]
+}
+
+@test "ref: re-register without ref mode clears previous intent" {
+  SHIV_REF="v1.0" SHIV_REF_MODE="release" shiv_register "foo" "/path/to/foo"
+  shiv_register "foo" "/path/to/foo"
+  run jq -e '.foo | has("refMode")' "$SHIV_REGISTRY"
+  [ "$status" -ne 0 ]
+}
+
+@test "ref: shiv_registry_set_ref updates ref and mode" {
+  shiv_register "foo" "/path/to/foo"
+  shiv_registry_set_ref "foo" "v2.0.0" "release"
+  [ "$(shiv_registry_ref "foo")" = "v2.0.0" ]
+  [ "$(shiv_registry_ref_mode "foo")" = "release" ]
 }
 
 # ============================================================================
@@ -333,6 +353,14 @@ setup() {
     skip "jsonschema not found"
   fi
   SHIV_REF="v1.0.0" shiv_register "foo" "/path/to/foo"
+  jsonschema validate "$REPO_DIR/registry.schema.json" "$SHIV_REGISTRY"
+}
+
+@test "schema: registry with ref mode is valid" {
+  if ! command -v jsonschema &>/dev/null; then
+    skip "jsonschema not found"
+  fi
+  SHIV_REF="v1.0.0" SHIV_REF_MODE="release" shiv_register "foo" "/path/to/foo"
   jsonschema validate "$REPO_DIR/registry.schema.json" "$SHIV_REGISTRY"
 }
 
