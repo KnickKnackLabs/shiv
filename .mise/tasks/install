@@ -95,7 +95,17 @@ else
     CURRENT_BRANCH=$(git -C "$TOOL_PATH" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
     if [ "$REF" != "$EXISTING_REF" ] || [ "$REF_MODE" != "$EXISTING_MODE" ]; then
       echo "  Ref changed (${EXISTING_MODE:-legacy}:${EXISTING_REF:-unknown} → ${REF_MODE}:${REF}), switching..."
-      git -C "$TOOL_PATH" fetch origin 2>&1 | sed 's/^/  /'
+      case "$REF_TYPE" in
+        commit)
+          git -C "$TOOL_PATH" fetch --depth 1 origin "$REF" 2>&1 | sed 's/^/  /'
+          ;;
+        tag)
+          git -C "$TOOL_PATH" fetch --tags origin 2>&1 | sed 's/^/  /'
+          ;;
+        branch)
+          git -C "$TOOL_PATH" fetch origin "$REF" 2>&1 | sed 's/^/  /'
+          ;;
+      esac
       git -C "$TOOL_PATH" checkout "$REF" 2>&1 | sed 's/^/  /'
     elif [ "$REF_MODE" = "branch" ] && [ "$REF" != "$CURRENT_BRANCH" ]; then
       echo "  Branch changed (${CURRENT_BRANCH:-detached} → ${REF}), switching..."

@@ -88,6 +88,23 @@ configure_remote_source() {
   git config --file "$GIT_CONFIG_GLOBAL" url."$REMOTES_DIR/".insteadOf "https://github.com/TestOrg/"
 }
 
+# Helper: add a release tag to an existing bare remote package.
+push_remote_release() {
+  local name="$1" tag="$2"
+  local work_dir="$TEST_HOME/update-$name"
+  local remote_dir="$REMOTES_DIR/$name.git"
+
+  git clone -q "$remote_dir" "$work_dir"
+  git -C "$work_dir" config user.email "test@test.com"
+  git -C "$work_dir" config user.name "Test"
+  echo "$tag" > "$work_dir/$tag.txt"
+  git -C "$work_dir" add .
+  git -C "$work_dir" commit -q -m "$tag"
+  git -C "$work_dir" tag -a "$tag" -m "$tag"
+  git -C "$work_dir" push -q origin main "$tag"
+  rm -rf "$work_dir"
+}
+
 
 # Helper: run shiv install through the mock shim
 run_install() {
@@ -364,6 +381,23 @@ MOCK
   [ "$status" -eq 0 ]
   [ "$(shiv_registry_ref "alpha")" = "v1.0.0" ]
   [ "$(shiv_registry_ref_mode "alpha")" = "release" ]
+}
+
+@test "install: reinstalling release channel fetches newly released tags" {
+  create_remote_package "alpha" "v1.0.0"
+  configure_remote_source "alpha"
+
+  run run_install "alpha"
+  [ "$status" -eq 0 ]
+  [ "$(shiv_registry_ref "alpha")" = "v1.0.0" ]
+
+  push_remote_release "alpha" "v1.1.0"
+
+  run run_install "alpha"
+  [ "$status" -eq 0 ]
+  [ "$(shiv_registry_ref "alpha")" = "v1.1.0" ]
+  [ "$(shiv_registry_ref_mode "alpha")" = "release" ]
+  [ "$(git -C "$SHIV_PACKAGES_DIR/alpha" describe --tags --exact-match HEAD)" = "v1.1.0" ]
 }
 
 @test "install: @main explicitly tracks the main branch" {
