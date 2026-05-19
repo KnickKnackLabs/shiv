@@ -88,6 +88,22 @@ configure_remote_source() {
   git config --file "$GIT_CONFIG_GLOBAL" url."$REMOTES_DIR/".insteadOf "https://github.com/TestOrg/"
 }
 
+# Helper: add a release tag to an existing bare remote package.
+add_remote_package_tag() {
+  local name="$1" tag="$2"
+  local remote_dir="$REMOTES_DIR/$name.git"
+  local tmp_dir="$TEST_HOME/tmp-$name-$tag"
+
+  git clone -q "$remote_dir" "$tmp_dir"
+  git -C "$tmp_dir" config user.email "test@test.com"
+  git -C "$tmp_dir" config user.name "Test"
+  echo "$tag" > "$tmp_dir/$tag.txt"
+  git -C "$tmp_dir" add .
+  git -C "$tmp_dir" commit -q -m "$tag"
+  git -C "$tmp_dir" tag -a "$tag" -m "$tag"
+  git -C "$tmp_dir" push -q origin main "$tag"
+  rm -rf "$tmp_dir"
+}
 
 # Helper: run shiv install through the mock shim
 run_install() {
@@ -375,6 +391,70 @@ MOCK
   [ "$(shiv_registry_ref "alpha")" = "main" ]
   [ "$(shiv_registry_ref_mode "alpha")" = "branch" ]
   [ "$(git -C "$SHIV_PACKAGES_DIR/alpha" rev-parse --abbrev-ref HEAD)" = "main" ]
+}
+
+@test "install: reinstalling release channel fetches newly available tags" {
+  create_remote_package "alpha" "v1.0.0"
+  configure_remote_source "alpha"
+
+  run_install "alpha"
+  add_remote_package_tag "alpha" "v1.1.0"
+
+  run run_install "alpha"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q "✓ Installed alpha@v1.1.0"
+  [ "$(shiv_registry_ref "alpha")" = "v1.1.0" ]
+  [ "$(shiv_registry_ref_mode "alpha")" = "release" ]
+  [ "$(git -C "$SHIV_PACKAGES_DIR/alpha" describe --tags --exact-match HEAD)" = "v1.1.0" ]
+}
+
+@test "install: switching an existing release install to branch tracking fetches the branch" {
+  create_remote_package "alpha" "v1.0.0"
+  configure_remote_source "alpha"
+
+  run_install "alpha"
+
+  run run_install "alpha@main"
+  [ "$status" -eq 0 ]
+  [ "$(shiv_registry_ref "alpha")" = "main" ]
+  [ "$(shiv_registry_ref_mode "alpha")" = "branch" ]
+  [ "$(git -C "$SHIV_PACKAGES_DIR/alpha" rev-parse --abbrev-ref HEAD)" = "main" ]
+}
+
+@test "install: switching back to branch tracking reuses a clean local branch" {
+  create_remote_package "alpha" "v1.0.0"
+  configure_remote_source "alpha"
+
+  run_install "alpha@main"
+  run_install "alpha@v1.0.0"
+
+  run run_install "alpha@main"
+  [ "$status" -eq 0 ]
+  [ "$(shiv_registry_ref "alpha")" = "main" ]
+  [ "$(shiv_registry_ref_mode "alpha")" = "branch" ]
+  [ "$(git -C "$SHIV_PACKAGES_DIR/alpha" rev-parse --abbrev-ref HEAD)" = "main" ]
+}
+
+@test "install: switching to branch tracking refuses local branch commits" {
+  create_remote_package "alpha" "v1.0.0"
+  configure_remote_source "alpha"
+
+  run_install "alpha@main"
+  git -C "$SHIV_PACKAGES_DIR/alpha" config user.email "test@test.com"
+  git -C "$SHIV_PACKAGES_DIR/alpha" config user.name "Test"
+  echo "local work" > "$SHIV_PACKAGES_DIR/alpha/local.txt"
+  git -C "$SHIV_PACKAGES_DIR/alpha" add .
+  git -C "$SHIV_PACKAGES_DIR/alpha" commit -q -m "local work"
+  run_install "alpha@v1.0.0"
+
+  run run_install "alpha@main"
+  [ "$status" -ne 0 ]
+  echo "$output" | grep -q "Refusing to switch alpha to main"
+  echo "$output" | grep -q "local branch main has commits not on origin/main"
+  echo "$output" | grep -q "git -C .* log --oneline origin/main..main"
+  echo "$output" | grep -q "git -C .* reset --hard origin/main"
+  [ "$(shiv_registry_ref "alpha")" = "v1.0.0" ]
+  [ "$(shiv_registry_ref_mode "alpha")" = "tag" ]
 }
 
 @test "install: exact tag is recorded as a pinned tag" {
