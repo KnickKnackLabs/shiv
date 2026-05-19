@@ -95,11 +95,30 @@ else
     CURRENT_BRANCH=$(git -C "$TOOL_PATH" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
     if [ "$REF" != "$EXISTING_REF" ] || [ "$REF_MODE" != "$EXISTING_MODE" ]; then
       echo "  Ref changed (${EXISTING_MODE:-legacy}:${EXISTING_REF:-unknown} → ${REF_MODE}:${REF}), switching..."
-      git -C "$TOOL_PATH" fetch origin 2>&1 | sed 's/^/  /'
-      git -C "$TOOL_PATH" checkout "$REF" 2>&1 | sed 's/^/  /'
+      case "$REF_MODE" in
+        release|tag)
+          git -C "$TOOL_PATH" fetch --tags origin 2>&1 | sed 's/^/  /'
+          ;;
+        branch)
+          git -C "$TOOL_PATH" config --add remote.origin.fetch "+refs/heads/$REF:refs/remotes/origin/$REF"
+          git -C "$TOOL_PATH" fetch origin "+refs/heads/$REF:refs/remotes/origin/$REF" 2>&1 | sed 's/^/  /'
+          ;;
+        commit)
+          git -C "$TOOL_PATH" fetch --depth 1 origin "$REF" 2>&1 | sed 's/^/  /'
+          ;;
+      esac
+      if [ "$REF_MODE" = "branch" ]; then
+        git -C "$TOOL_PATH" checkout -B "$REF" "origin/$REF" 2>&1 | sed 's/^/  /'
+        git -C "$TOOL_PATH" branch --set-upstream-to="origin/$REF" "$REF" 2>&1 | sed 's/^/  /'
+      else
+        git -C "$TOOL_PATH" checkout "$REF" 2>&1 | sed 's/^/  /'
+      fi
     elif [ "$REF_MODE" = "branch" ] && [ "$REF" != "$CURRENT_BRANCH" ]; then
       echo "  Branch changed (${CURRENT_BRANCH:-detached} → ${REF}), switching..."
-      git -C "$TOOL_PATH" checkout "$REF" 2>&1 | sed 's/^/  /'
+      git -C "$TOOL_PATH" config --add remote.origin.fetch "+refs/heads/$REF:refs/remotes/origin/$REF"
+      git -C "$TOOL_PATH" fetch origin "+refs/heads/$REF:refs/remotes/origin/$REF" 2>&1 | sed 's/^/  /'
+      git -C "$TOOL_PATH" checkout -B "$REF" "origin/$REF" 2>&1 | sed 's/^/  /'
+      git -C "$TOOL_PATH" branch --set-upstream-to="origin/$REF" "$REF" 2>&1 | sed 's/^/  /'
     fi
   fi
 
