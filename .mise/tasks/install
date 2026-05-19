@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #MISE description="Install a tool — from the package index or a local path"
-#USAGE arg "<name>" help="Package name, optionally with ref (e.g., shimmer, frames@v1.0.0)"
+#USAGE arg "<name>" help="Package name, optionally with ref (bare/@latest release, @main branch, @v1.0.0 tag)"
 #USAGE arg "[path]" help="Local path to repo (optional — if omitted, clones from package index)"
 #USAGE flag "--as <alias>" var=#true help="Command alias(es) — creates symlinks to the package shim"
 set -euo pipefail
@@ -13,10 +13,14 @@ NAME="${usage_name}"
 LOCAL_PATH="${usage_path:-}"
 SEP='|'
 
-# Parse name@ref syntax
+# Parse name@ref syntax. Bare installs and @latest are release-channel
+# installs; explicit branches/tags/commits preserve their requested intent.
+REQUESTED_REF=""
 REF=""
+REF_TYPE=""
+REF_MODE=""
 if [[ "$NAME" == *@* ]]; then
-  REF="${NAME#*@}"
+  REQUESTED_REF="${NAME#*@}"
   NAME="${NAME%%@*}"
 fi
 
@@ -28,10 +32,11 @@ fi
 
 if [ -n "$LOCAL_PATH" ]; then
   # Local install — point at an existing repo
-  if [ -n "$REF" ]; then
+  if [ -n "$REQUESTED_REF" ]; then
     echo "Error: @ref syntax is not supported with local path installs" >&2
     exit 1
   fi
+  REF_MODE="local"
   TOOL_PATH="$(cd "$LOCAL_PATH" && pwd)"
 else
   # Package install — look up in sources and clone
@@ -52,52 +57,69 @@ else
     exit 1
   fi
 
-  # Detect ref type if a ref was specified
-  REF_TYPE=""
-  if [ -n "$REF" ]; then
+  # Resolve install intent. Bare installs and @latest use the newest stable
+  # semver-ish release tag. Branch tracking is explicit: install name@main.
+  if [ -z "$REQUESTED_REF" ] || [ "$REQUESTED_REF" = "latest" ]; then
+    latest_status=0
+    REF=$(shiv_latest_release_tag "$GH_REPO") || latest_status=$?
+    if [ "$latest_status" -eq 1 ]; then
+      echo "" >&2
+      echo "  ✗ No release tags found for $NAME" >&2
+      echo "    Use 'shiv install ${NAME}@main' to track the main branch," >&2
+      echo "    or 'shiv install ${NAME}@<branch>' for another branch." >&2
+      echo "" >&2
+      exit 1
+    elif [ "$latest_status" -ne 0 ]; then
+      exit "$latest_status"
+    fi
+    REF_TYPE="tag"
+    REF_MODE="release"
+  else
+    REF="$REQUESTED_REF"
     REF_TYPE=$(shiv_detect_ref_type "$GH_REPO" "$REF") || exit 1
+    case "$REF_TYPE" in
+      branch) REF_MODE="branch" ;;
+      tag) REF_MODE="tag" ;;
+      commit) REF_MODE="commit" ;;
+    esac
   fi
 
   TOOL_PATH="$SHIV_PACKAGES_DIR/$NAME"
 
-  # If already cloned but ref changed, switch to the new ref
+  # If already cloned but the resolved ref or intent changed, switch in-place
+  # rather than deleting a directory we might be running from (e.g., shiv
+  # reinstalling itself).
   if [ -d "$TOOL_PATH" ]; then
     EXISTING_REF=$(shiv_registry_ref "$NAME")
-    # Normalize: if the requested ref matches the current branch, treat as same
+    EXISTING_MODE=$(shiv_registry_ref_mode "$NAME")
     CURRENT_BRANCH=$(git -C "$TOOL_PATH" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
-    if [ "$REF" != "$EXISTING_REF" ] && [ "$REF" != "$CURRENT_BRANCH" ]; then
-      # Switch ref in-place (fetch + checkout) to avoid deleting a directory
-      # we might be running from (e.g., shiv reinstalling itself)
-      if [ -n "$EXISTING_REF" ] && [ -z "$REF" ]; then
-        echo "  ⚠ Unpinning from $EXISTING_REF — $NAME will now track the default branch"
-      else
-        echo "  Ref changed (${EXISTING_REF:-default} → ${REF:-default}), switching..."
-      fi
+    if [ "$REF" != "$EXISTING_REF" ] || [ "$REF_MODE" != "$EXISTING_MODE" ]; then
+      echo "  Ref changed (${EXISTING_MODE:-legacy}:${EXISTING_REF:-unknown} → ${REF_MODE}:${REF}), switching..."
       git -C "$TOOL_PATH" fetch origin 2>&1 | sed 's/^/  /'
-      # Empty ref means "back to default branch"
-      CHECKOUT_TARGET="${REF:-$(git -C "$TOOL_PATH" remote show origin 2>/dev/null | sed -n 's/.*HEAD branch: //p')}"
-      git -C "$TOOL_PATH" checkout "$CHECKOUT_TARGET" 2>&1 | sed 's/^/  /'
-    elif [ "$REF" != "$EXISTING_REF" ] && [ "$REF" = "$CURRENT_BRANCH" ]; then
-      # e.g., installing tool@main when already on main — just update the registry
-      :
+      git -C "$TOOL_PATH" checkout "$REF" 2>&1 | sed 's/^/  /'
+    elif [ "$REF_MODE" = "branch" ] && [ "$REF" != "$CURRENT_BRANCH" ]; then
+      echo "  Branch changed (${CURRENT_BRANCH:-detached} → ${REF}), switching..."
+      git -C "$TOOL_PATH" checkout "$REF" 2>&1 | sed 's/^/  /'
     fi
   fi
 
   if [ -d "$TOOL_PATH" ]; then
-    # Already cloned, same ref
     echo "  Already cloned: $TOOL_PATH"
-    if git -C "$TOOL_PATH" symbolic-ref HEAD &>/dev/null; then
-      gum spin --title "  Pulling latest..." --show-error -- git -C "$TOOL_PATH" pull --ff-only
-    else
-      echo "  Pinned to ${REF} — skipping pull"
-    fi
+    case "$REF_MODE" in
+      branch)
+        gum spin --title "  Pulling latest from $REF..." --show-error -- git -C "$TOOL_PATH" pull --ff-only
+        ;;
+      release)
+        echo "  Release $REF already installed — skipping pull"
+        ;;
+      tag|commit)
+        echo "  Pinned to $REF — skipping pull"
+        ;;
+    esac
   else
     mkdir -p "$SHIV_PACKAGES_DIR"
     CLONE_URL="https://github.com/$GH_REPO.git"
     case "$REF_TYPE" in
-      "")
-        gum spin --title "  Cloning $GH_REPO..." --show-error -- git clone --single-branch "$CLONE_URL" "$TOOL_PATH"
-        ;;
       branch)
         gum spin --title "  Cloning $GH_REPO@$REF..." --show-error -- git clone --branch "$REF" --single-branch "$CLONE_URL" "$TOOL_PATH"
         ;;
@@ -129,9 +151,9 @@ fi
 
 shiv_create_shim "$NAME" "$TOOL_PATH"
 if [ -n "${usage_as:-}" ]; then
-  SHIV_REF="$REF" shiv_register "$NAME" "$TOOL_PATH" "${ALIASES[@]}"
+  SHIV_REF="$REF" SHIV_REF_MODE="$REF_MODE" shiv_register "$NAME" "$TOOL_PATH" "${ALIASES[@]}"
 else
-  SHIV_REF="$REF" shiv_register "$NAME" "$TOOL_PATH"
+  SHIV_REF="$REF" SHIV_REF_MODE="$REF_MODE" shiv_register "$NAME" "$TOOL_PATH"
 fi
 shiv_cache_tasks "$NAME" "$TOOL_PATH"
 shiv_cache_task_map "$NAME" "$TOOL_PATH"

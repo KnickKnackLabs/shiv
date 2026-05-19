@@ -155,6 +155,25 @@ shiv doctor`}</CodeBlock>
 }`}</CodeBlock>
 
       <Paragraph>
+        By default, package-index installs use the newest stable semver release tag.
+        Use an explicit ref when you want branch tracking or an exact pin:
+      </Paragraph>
+
+      <CodeBlock lang="bash">{`shiv install notes         # newest released semver tag
+shiv install notes@latest  # same as bare install
+shiv install notes@main    # track a branch explicitly
+shiv install notes@v0.8.4  # pin an exact tag
+shiv install notes@abc1234 # pin an exact commit`}</CodeBlock>
+
+      <Paragraph>
+        <Code>shiv update</Code> preserves that intent: release-channel installs
+        advance to the newest release tag, branch installs pull their branch, and
+        exact tag/commit pins stay fixed until you reinstall at another ref.
+        Legacy installs without recorded intent are refused with guidance to
+        choose <Code>@latest</Code> or <Code>@main</Code> explicitly.
+      </Paragraph>
+
+      <Paragraph>
         You can also install directly from a local path:
       </Paragraph>
 

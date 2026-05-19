@@ -56,9 +56,11 @@ shiv_register() {
   local tmp
   tmp=$(jq --arg n "$name" --arg p "$repo_dir" \
     --arg r "${SHIV_REF:-}" \
+    --arg m "${SHIV_REF_MODE:-}" \
     --argjson a "$aliases_json" \
     '.[$n] = ({"path": $p}
       + (if $r != "" then {"ref": $r} else {} end)
+      + (if $m != "" then {"refMode": $m} else {} end)
       + (if $a then {"aliases": $a} else {} end))' \
     "$SHIV_REGISTRY")
   echo "$tmp" > "$SHIV_REGISTRY"
@@ -89,6 +91,27 @@ shiv_registry_aliases() {
 shiv_registry_ref() {
   local name="$1"
   jq -r --arg n "$name" '.[$n].ref // empty' "$SHIV_REGISTRY"
+}
+
+# Get the update intent for a package (empty for legacy entries)
+shiv_registry_ref_mode() {
+  local name="$1"
+  jq -r --arg n "$name" '.[$n].refMode // empty' "$SHIV_REGISTRY"
+}
+
+# Set the current ref and update intent for an existing package.
+shiv_registry_set_ref() {
+  local name="$1" ref="$2" mode="$3"
+  shiv_init_registry
+  local tmp
+  tmp=$(jq --arg n "$name" --arg r "$ref" --arg m "$mode" \
+    '.[$n]
+      |= (. + (if $r != "" then {"ref": $r} else {} end)
+              + (if $m != "" then {"refMode": $m} else {} end))
+      | if $r == "" then .[$n] |= del(.ref) else . end
+      | if $m == "" then .[$n] |= del(.refMode) else . end' \
+    "$SHIV_REGISTRY")
+  echo "$tmp" > "$SHIV_REGISTRY"
 }
 
 # Set aliases for an existing package

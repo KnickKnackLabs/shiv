@@ -16,8 +16,10 @@ setup() {
   export SHIV_CONFIG_DIR="$TEST_HOME/.config/shiv"
   export SHIV_CACHE_DIR="$TEST_HOME/.cache/shiv"
   export SHIV_REGISTRY="$SHIV_CONFIG_DIR/registry.json"
+  export REMOTES_DIR="$TEST_HOME/remotes"
+  export GIT_CONFIG_GLOBAL="$TEST_HOME/gitconfig"
 
-  mkdir -p "$SHIV_BIN_DIR"
+  mkdir -p "$SHIV_BIN_DIR" "$REMOTES_DIR"
   shiv_init_registry
   setup_shiv_on_path
 
@@ -49,6 +51,41 @@ create_local_repo() {
   printf 'hello\tSay hello\n' > "$SHIV_CACHE_DIR/completions/$name.cache"
 
   echo "$repo_dir"
+}
+
+# Helper: create a bare remote package with optional release tags.
+create_remote_package() {
+  local name="$1"
+  shift
+  local work_dir="$TEST_HOME/work-$name"
+  local remote_dir="$REMOTES_DIR/$name.git"
+
+  mkdir -p "$work_dir"
+  git -C "$work_dir" init -q -b main
+  git -C "$work_dir" config user.email "test@test.com"
+  git -C "$work_dir" config user.name "Test"
+  touch "$work_dir/README.md"
+  git -C "$work_dir" add .
+  git -C "$work_dir" commit -q -m "init"
+
+  for tag in "$@"; do
+    echo "$tag" > "$work_dir/$tag.txt"
+    git -C "$work_dir" add .
+    git -C "$work_dir" commit -q -m "$tag"
+    git -C "$work_dir" tag -a "$tag" -m "$tag"
+  done
+
+  git clone -q --bare "$work_dir" "$remote_dir"
+  rm -rf "$work_dir"
+}
+
+# Helper: map a source-index GitHub slug to the local bare remote.
+configure_remote_source() {
+  local name="$1"
+  local sources="$TEST_HOME/sources.json"
+  printf '{"%s": "TestOrg/%s"}\n' "$name" "$name" > "$sources"
+  export SHIV_SOURCES="$sources"
+  git config --file "$GIT_CONFIG_GLOBAL" url."$REMOTES_DIR/".insteadOf "https://github.com/TestOrg/"
 }
 
 
@@ -115,6 +152,7 @@ MOCK
 
   run_install "myapp" "$repo_dir"
   [ -n "$(shiv_registry_path "myapp")" ]
+  [ "$(shiv_registry_ref_mode "myapp")" = "local" ]
 }
 
 @test "install: local path install runs mise trust and install" {
@@ -300,6 +338,65 @@ MOCK
 
   run bash -c "cd /tmp && '$SHIV_BIN_DIR/myapp' hello 2>&1"
   ! echo "$output" | grep -q "warning"
+}
+
+# ============================================================================
+# Package-index release and ref installs
+# ============================================================================
+
+@test "install: bare package install resolves to latest release tag" {
+  create_remote_package "alpha" "v1.0.0" "v1.2.0"
+  configure_remote_source "alpha"
+
+  run run_install "alpha"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q "✓ Installed alpha@v1.2.0"
+  [ "$(shiv_registry_ref "alpha")" = "v1.2.0" ]
+  [ "$(shiv_registry_ref_mode "alpha")" = "release" ]
+  [ "$(git -C "$SHIV_PACKAGES_DIR/alpha" describe --tags --exact-match HEAD)" = "v1.2.0" ]
+}
+
+@test "install: @latest resolves to latest release tag" {
+  create_remote_package "alpha" "v0.9.0" "v1.0.0"
+  configure_remote_source "alpha"
+
+  run run_install "alpha@latest"
+  [ "$status" -eq 0 ]
+  [ "$(shiv_registry_ref "alpha")" = "v1.0.0" ]
+  [ "$(shiv_registry_ref_mode "alpha")" = "release" ]
+}
+
+@test "install: @main explicitly tracks the main branch" {
+  create_remote_package "alpha" "v1.0.0"
+  configure_remote_source "alpha"
+
+  run run_install "alpha@main"
+  [ "$status" -eq 0 ]
+  [ "$(shiv_registry_ref "alpha")" = "main" ]
+  [ "$(shiv_registry_ref_mode "alpha")" = "branch" ]
+  [ "$(git -C "$SHIV_PACKAGES_DIR/alpha" rev-parse --abbrev-ref HEAD)" = "main" ]
+}
+
+@test "install: exact tag is recorded as a pinned tag" {
+  create_remote_package "alpha" "v1.0.0" "v1.2.0"
+  configure_remote_source "alpha"
+
+  run run_install "alpha@v1.0.0"
+  [ "$status" -eq 0 ]
+  [ "$(shiv_registry_ref "alpha")" = "v1.0.0" ]
+  [ "$(shiv_registry_ref_mode "alpha")" = "tag" ]
+  [ "$(git -C "$SHIV_PACKAGES_DIR/alpha" describe --tags --exact-match HEAD)" = "v1.0.0" ]
+}
+
+@test "install: package with no release tags tells user to choose a branch" {
+  create_remote_package "alpha"
+  configure_remote_source "alpha"
+
+  run run_install "alpha"
+  [ "$status" -ne 0 ]
+  echo "$output" | grep -q "No release tags found for alpha"
+  echo "$output" | grep -q "shiv install alpha@main"
+  [ ! -d "$SHIV_PACKAGES_DIR/alpha" ]
 }
 
 # ============================================================================

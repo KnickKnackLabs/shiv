@@ -62,6 +62,33 @@ push_remote_commit() {
   rm -rf "$tmp_dir"
 }
 
+# Helper: push a release tag to the remote.
+push_remote_tag() {
+  local name="$1" tag="$2"
+  local bare_dir="$TEST_HOME/remotes/$name.git"
+  local tmp_dir="$TEST_HOME/tmp-tag"
+
+  git clone -q "$bare_dir" "$tmp_dir"
+  git -C "$tmp_dir" config user.email "test@test.com"
+  git -C "$tmp_dir" config user.name "Test"
+  echo "$tag" > "$tmp_dir/$tag.txt"
+  git -C "$tmp_dir" add .
+  git -C "$tmp_dir" commit -q -m "$tag"
+  git -C "$tmp_dir" tag -a "$tag" -m "$tag"
+  git -C "$tmp_dir" push -q origin main "$tag"
+  rm -rf "$tmp_dir"
+}
+
+# Helper: register a package as an explicit branch-tracking install.
+register_branch_package() {
+  local name="$1"
+  shift
+  local repo="$SHIV_PACKAGES_DIR/$name"
+  local branch
+  branch=$(git -C "$repo" rev-parse --abbrev-ref HEAD)
+  SHIV_REF="$branch" SHIV_REF_MODE="branch" shiv_register "$name" "$repo" "$@"
+}
+
 # Helper: run shiv update through the mock shim
 run_update() {
   local name="${1:-}"
@@ -110,7 +137,7 @@ extract_column() {
 
 @test "update: up-to-date package shows ✓" {
   create_test_repo_with_remote "alpha"
-  shiv_register "alpha" "$SHIV_PACKAGES_DIR/alpha"
+  register_branch_package "alpha"
   shiv_create_shim "alpha" "$SHIV_PACKAGES_DIR/alpha"
 
   run run_update "alpha"
@@ -123,9 +150,56 @@ extract_column() {
 # Successful update (with new commits)
 # ============================================================================
 
-@test "update: new commits shows commit range" {
+@test "update: release channel advances to newest release tag" {
+  create_test_repo_with_remote "alpha"
+  push_remote_tag "alpha" "v1.0.0"
+  git -C "$SHIV_PACKAGES_DIR/alpha" fetch -q --tags origin
+  git -C "$SHIV_PACKAGES_DIR/alpha" checkout -q "v1.0.0"
+  SHIV_REF="v1.0.0" SHIV_REF_MODE="release" shiv_register "alpha" "$SHIV_PACKAGES_DIR/alpha"
+  shiv_create_shim "alpha" "$SHIV_PACKAGES_DIR/alpha"
+
+  push_remote_tag "alpha" "v1.1.0"
+
+  run run_update "alpha"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q "v1.0.0 → v1.1.0"
+  [ "$(shiv_registry_ref "alpha")" = "v1.1.0" ]
+  [ "$(shiv_registry_ref_mode "alpha")" = "release" ]
+  [ "$(git -C "$SHIV_PACKAGES_DIR/alpha" describe --tags --exact-match HEAD)" = "v1.1.0" ]
+}
+
+@test "update: exact tag pin stays fixed when newer release exists" {
+  create_test_repo_with_remote "alpha"
+  push_remote_tag "alpha" "v1.0.0"
+  git -C "$SHIV_PACKAGES_DIR/alpha" fetch -q --tags origin
+  git -C "$SHIV_PACKAGES_DIR/alpha" checkout -q "v1.0.0"
+  SHIV_REF="v1.0.0" SHIV_REF_MODE="tag" shiv_register "alpha" "$SHIV_PACKAGES_DIR/alpha"
+  shiv_create_shim "alpha" "$SHIV_PACKAGES_DIR/alpha"
+
+  push_remote_tag "alpha" "v1.1.0"
+
+  run run_update "alpha"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q "pinned to v1.0.0"
+  [ "$(shiv_registry_ref "alpha")" = "v1.0.0" ]
+  [ "$(shiv_registry_ref_mode "alpha")" = "tag" ]
+  [ "$(git -C "$SHIV_PACKAGES_DIR/alpha" describe --tags --exact-match HEAD)" = "v1.0.0" ]
+}
+
+@test "update: legacy package without update intent fails with reinstall guidance" {
   create_test_repo_with_remote "alpha"
   shiv_register "alpha" "$SHIV_PACKAGES_DIR/alpha"
+
+  run run_update "alpha"
+  [ "$status" -ne 0 ]
+  echo "$output" | grep -q "legacy install has no update intent"
+  echo "$output" | grep -q "shiv install alpha@latest"
+  echo "$output" | grep -q "shiv install alpha@main"
+}
+
+@test "update: new commits shows commit range" {
+  create_test_repo_with_remote "alpha"
+  register_branch_package "alpha"
   shiv_create_shim "alpha" "$SHIV_PACKAGES_DIR/alpha"
 
   push_remote_commit "alpha"
@@ -143,7 +217,7 @@ extract_column() {
 
 @test "update: diverged repo shows ⚠ with reason" {
   create_test_repo_with_remote "alpha"
-  shiv_register "alpha" "$SHIV_PACKAGES_DIR/alpha"
+  register_branch_package "alpha"
   shiv_create_shim "alpha" "$SHIV_PACKAGES_DIR/alpha"
 
   # Push a commit to remote
@@ -163,7 +237,7 @@ extract_column() {
 
 @test "update: pull failure does not refresh shim" {
   create_test_repo_with_remote "alpha"
-  shiv_register "alpha" "$SHIV_PACKAGES_DIR/alpha"
+  register_branch_package "alpha"
   shiv_create_shim "alpha" "$SHIV_PACKAGES_DIR/alpha"
 
   # Record shim content hash
@@ -192,8 +266,8 @@ extract_column() {
 @test "update: multi-package shows summary table" {
   create_test_repo_with_remote "alpha"
   create_test_repo_with_remote "bravo"
-  shiv_register "alpha" "$SHIV_PACKAGES_DIR/alpha"
-  shiv_register "bravo" "$SHIV_PACKAGES_DIR/bravo"
+  register_branch_package "alpha"
+  register_branch_package "bravo"
   shiv_create_shim "alpha" "$SHIV_PACKAGES_DIR/alpha"
   shiv_create_shim "bravo" "$SHIV_PACKAGES_DIR/bravo"
 
@@ -206,7 +280,7 @@ extract_column() {
 
 @test "update: single package skips summary table" {
   create_test_repo_with_remote "alpha"
-  shiv_register "alpha" "$SHIV_PACKAGES_DIR/alpha"
+  register_branch_package "alpha"
   shiv_create_shim "alpha" "$SHIV_PACKAGES_DIR/alpha"
 
   run run_update "alpha"
@@ -221,12 +295,12 @@ extract_column() {
 
 @test "update: shows branch in summary table" {
   create_test_repo_with_remote "alpha" "develop"
-  shiv_register "alpha" "$SHIV_PACKAGES_DIR/alpha"
+  register_branch_package "alpha"
   shiv_create_shim "alpha" "$SHIV_PACKAGES_DIR/alpha"
 
   # Need a second package to trigger summary table
   create_test_repo_with_remote "bravo"
-  shiv_register "bravo" "$SHIV_PACKAGES_DIR/bravo"
+  register_branch_package "bravo"
   shiv_create_shim "bravo" "$SHIV_PACKAGES_DIR/bravo"
 
   run run_update
@@ -236,7 +310,7 @@ extract_column() {
 
 @test "update: shows dirty marker in summary table" {
   create_test_repo_with_remote "alpha"
-  shiv_register "alpha" "$SHIV_PACKAGES_DIR/alpha"
+  register_branch_package "alpha"
   shiv_create_shim "alpha" "$SHIV_PACKAGES_DIR/alpha"
 
   # Make it dirty
@@ -244,7 +318,7 @@ extract_column() {
 
   # Need a second package to trigger summary table
   create_test_repo_with_remote "bravo"
-  shiv_register "bravo" "$SHIV_PACKAGES_DIR/bravo"
+  register_branch_package "bravo"
   shiv_create_shim "bravo" "$SHIV_PACKAGES_DIR/bravo"
 
   run run_update
@@ -259,7 +333,7 @@ extract_column() {
 
 @test "update: resolves alias to package name" {
   create_test_repo_with_remote "alpha"
-  shiv_register "alpha" "$SHIV_PACKAGES_DIR/alpha" "a"
+  register_branch_package "alpha" "a"
   shiv_create_shim "alpha" "$SHIV_PACKAGES_DIR/alpha"
 
   run run_update "a"
