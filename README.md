@@ -8,7 +8,7 @@
 
 ![shell: bash](https://img.shields.io/badge/shell-bash-4EAA25?style=flat&logo=gnubash&logoColor=white)
 [![runtime: mise](https://img.shields.io/badge/runtime-mise-7c3aed?style=flat)](https://mise.jdx.dev)
-![tests: 285 passing](https://img.shields.io/badge/tests-285%20passing-brightgreen?style=flat)
+![tests: 294 passing](https://img.shields.io/badge/tests-294%20passing-brightgreen?style=flat)
 ![packages: 39](https://img.shields.io/badge/packages-39-blue?style=flat)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat)](LICENSE)
 
@@ -111,6 +111,20 @@ You can also install directly from a local path:
 shiv install my-tool /path/to/repo
 ```
 
+## Suckers: tiny remote tasklets
+
+Some useful tools are smaller than a package. `shiv run-url` runs a single pinned uv script from a raw URL without cloning a repo. Use it for small diagnostics, migrations, and experiments that may or may not grow into packages later.
+
+```bash
+# Pinned GitHub raw or gist URL required by default
+shiv run-url https://raw.githubusercontent.com/owner/repo/<commit>/task.py --json
+
+# Floating URLs are allowed only when made explicit
+shiv run-url --floating https://raw.githubusercontent.com/owner/repo/main/task.py
+```
+
+Remote code execution is the point and the risk: pinned revisions are the default, query strings are rejected, downloads are cached by content hash, and the script receives `SUCKER_CALLER_PWD` for the directory where you invoked shiv.
+
 ## Writing a shiv package
 
 Any git repo with a `mise.toml` and executable scripts in `.mise/tasks/` is a shiv package. Each task becomes a subcommand:
@@ -134,7 +148,7 @@ cd shiv && mise trust && mise install
 mise run test
 ```
 
-Tests use [BATS](https://github.com/bats-core/bats-core) — 285 tests across 13 suites.
+Tests use [BATS](https://github.com/bats-core/bats-core) — 294 tests across 14 suites.
 
 <div align="center">
 

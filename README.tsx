@@ -180,6 +180,28 @@ shiv install notes@abc1234 # pin an exact commit`}</CodeBlock>
       <CodeBlock lang="bash">{`shiv install my-tool /path/to/repo`}</CodeBlock>
     </Section>
 
+    <Section title="Suckers: tiny remote tasklets">
+      <Paragraph>
+        Some useful tools are smaller than a package. <Code>shiv run-url</Code>{" "}
+        runs a single pinned uv script from a raw URL without cloning a repo.
+        Use it for small diagnostics, migrations, and experiments that may or
+        may not grow into packages later.
+      </Paragraph>
+
+      <CodeBlock lang="bash">{`# Pinned GitHub raw or gist URL required by default
+shiv run-url https://raw.githubusercontent.com/owner/repo/<commit>/task.py --json
+
+# Floating URLs are allowed only when made explicit
+shiv run-url --floating https://raw.githubusercontent.com/owner/repo/main/task.py`}</CodeBlock>
+
+      <Paragraph>
+        Remote code execution is the point and the risk: pinned revisions are
+        the default, query strings are rejected, downloads are cached by content
+        hash, and the script receives <Code>SUCKER_CALLER_PWD</Code> for the
+        directory where you invoked shiv.
+      </Paragraph>
+    </Section>
+
     <Section title="Writing a shiv package">
       <Paragraph>
         Any git repo with a <Code>mise.toml</Code> and executable scripts
