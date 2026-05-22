@@ -11,6 +11,7 @@ shiv = "https://github.com/KnickKnackLabs/vfox-shiv"
 "shiv:readme" = "latest"
 bats = "1.13.0"
 gum = "0.17.0"
+uv = "0.11.15"
 jsonschema = "14.14.2"
 "aqua:shenwei356/rush" = "0.9.0"
 

@@ -1,0 +1,223 @@
+#!/usr/bin/env bash
+#MISE description="Run a pinned remote tasklet URL"
+set -euo pipefail
+
+SHIV_CACHE_DIR="${SHIV_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/shiv}"
+SUCKER_CACHE_DIR="$SHIV_CACHE_DIR/suckers"
+CURL="${CURL:-curl}"
+
+usage() {
+  cat <<'EOF'
+Usage: shiv run-url [--floating] <url> [args...]
+
+Run a small remote tasklet (a "sucker") from an explicit URL.
+
+Supported v1 script type:
+  Python uv scripts whose first line contains: uv run --script
+
+Safety defaults:
+  - GitHub raw and gist URLs must be pinned to a commit-like hex revision.
+  - Floating URLs such as branch names or unpinned gist raw URLs are refused.
+  - Pass --floating before the URL to make a floating run explicit.
+  - Query strings and fragments are rejected to avoid credential-bearing URLs.
+
+Examples:
+  shiv run-url https://raw.githubusercontent.com/owner/repo/<commit>/task.py --json
+  shiv run-url https://gist.githubusercontent.com/owner/<gist>/raw/<rev>/task.py arg
+EOF
+}
+
+sha256_stdin() {
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 | awk '{print $1}'
+  elif command -v sha256sum >/dev/null 2>&1; then
+    sha256sum | awk '{print $1}'
+  else
+    echo "shiv run-url: neither shasum nor sha256sum found" >&2
+    return 1
+  fi
+}
+
+sha256_file() {
+  local file="$1"
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$file" | awk '{print $1}'
+  elif command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$file" | awk '{print $1}'
+  else
+    echo "shiv run-url: neither shasum nor sha256sum found" >&2
+    return 1
+  fi
+}
+
+is_hex_revision() {
+  local value="$1"
+  [[ "$value" =~ ^[0-9a-fA-F]{7,40}$ ]]
+}
+
+is_pinned_url() {
+  local url="$1"
+  local rest owner repo ref path_extra gist raw_marker revision
+
+  case "$url" in
+    https://raw.githubusercontent.com/*)
+      rest="${url#https://raw.githubusercontent.com/}"
+      IFS='/' read -r owner repo ref path_extra <<EOF
+$rest
+EOF
+      [ -n "$owner" ] || return 1
+      [ -n "$repo" ] || return 1
+      [ -n "$ref" ] || return 1
+      [ -n "$path_extra" ] || return 1
+      is_hex_revision "$ref"
+      ;;
+    https://gist.githubusercontent.com/*)
+      rest="${url#https://gist.githubusercontent.com/}"
+      IFS='/' read -r owner gist raw_marker revision path_extra <<EOF
+$rest
+EOF
+      [ -n "$owner" ] || return 1
+      [ -n "$gist" ] || return 1
+      [ "$raw_marker" = "raw" ] || return 1
+      [ -n "$revision" ] || return 1
+      is_hex_revision "$revision"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+reject_credential_bearing_url_shapes() {
+  local url="$1"
+  case "$url" in
+    *\?*|*#*)
+      echo "shiv run-url: query strings and fragments are not supported" >&2
+      echo "shiv run-url: use a credential-free pinned raw URL" >&2
+      return 1
+      ;;
+  esac
+}
+
+download_to_cache() {
+  local url="$1" floating="$2"
+  local url_key index_file content_hash object_file tmp
+
+  url_key=$(printf '%s' "$url" | sha256_stdin)
+  index_file="$SUCKER_CACHE_DIR/urls/$url_key"
+
+  if [ "$floating" != "true" ] && [ -f "$index_file" ]; then
+    content_hash=$(sed -n '1p' "$index_file")
+    object_file="$SUCKER_CACHE_DIR/objects/$content_hash"
+    if [ -n "$content_hash" ] && [ -f "$object_file" ]; then
+      CACHED_FILE="$object_file"
+      return 0
+    fi
+  fi
+
+  mkdir -p "$SUCKER_CACHE_DIR/objects" "$SUCKER_CACHE_DIR/urls"
+  tmp=$(mktemp "$SUCKER_CACHE_DIR/download.XXXXXX")
+  if ! "$CURL" -fsSL "$url" -o "$tmp"; then
+    rm -f "$tmp"
+    echo "shiv run-url: failed to download sucker" >&2
+    return 1
+  fi
+
+  content_hash=$(sha256_file "$tmp")
+  object_file="$SUCKER_CACHE_DIR/objects/$content_hash"
+  if [ ! -f "$object_file" ]; then
+    mv "$tmp" "$object_file"
+  else
+    rm -f "$tmp"
+  fi
+  if [ "$floating" != "true" ]; then
+    printf '%s\n' "$content_hash" > "$index_file.tmp"
+    mv "$index_file.tmp" "$index_file"
+  fi
+
+  CACHED_FILE="$object_file"
+}
+
+run_cached_sucker() {
+  local script="$1"
+  shift
+  local first_line caller_dir
+
+  first_line=$(sed -n '1p' "$script")
+  case "$first_line" in
+    *"uv run --script"*) ;;
+    *)
+      echo "shiv run-url: unsupported sucker script" >&2
+      echo "shiv run-url: first line must contain 'uv run --script'" >&2
+      return 1
+      ;;
+  esac
+
+  if ! command -v uv >/dev/null 2>&1; then
+    echo "shiv run-url: uv not found; run 'mise install' for shiv or install uv" >&2
+    return 127
+  fi
+
+  caller_dir="${SHIV_CALLER_PWD:-${MISE_ORIGINAL_CWD:-$PWD}}"
+  if [ ! -d "$caller_dir" ]; then
+    echo "shiv run-url: caller directory not found: $caller_dir" >&2
+    return 1
+  fi
+
+  export SUCKER_CALLER_PWD="$caller_dir"
+  export SUCKER_SOURCE_URL="$URL"
+  export SUCKER_CACHE_PATH="$script"
+
+  echo "shiv run-url: $URL" >&2
+  echo "shiv run-url: cache $script" >&2
+
+  cd "$caller_dir"
+  exec uv run --script "$script" "$@"
+}
+
+FLOATING=false
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    --floating)
+      FLOATING=true
+      shift
+      ;;
+    --)
+      shift
+      break
+      ;;
+    -*)
+      echo "shiv run-url: unknown option: $1" >&2
+      usage >&2
+      exit 1
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
+if [ $# -lt 1 ]; then
+  echo "shiv run-url: URL is required" >&2
+  usage >&2
+  exit 1
+fi
+
+URL="$1"
+shift
+
+reject_credential_bearing_url_shapes "$URL"
+
+if ! is_pinned_url "$URL" && [ "$FLOATING" != "true" ]; then
+  echo "shiv run-url: refusing floating or unsupported URL" >&2
+  echo "shiv run-url: use a pinned raw GitHub/gist URL, or pass --floating explicitly" >&2
+  exit 1
+fi
+
+CACHED_FILE=""
+download_to_cache "$URL" "$FLOATING"
+run_cached_sucker "$CACHED_FILE" "$@"
