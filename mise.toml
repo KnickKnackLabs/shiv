@@ -7,7 +7,7 @@ experimental = true
 shiv = "https://github.com/KnickKnackLabs/vfox-shiv"
 
 [tools]
-"shiv:codebase" = "0.2.0"
+"shiv:codebase" = "0.3"
 "shiv:readme" = "latest"
 bats = "1.13.0"
 gum = "0.17.0"
