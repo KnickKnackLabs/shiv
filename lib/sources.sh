@@ -60,6 +60,54 @@ shiv_list_sources() {
   fi
 }
 
+# Sort stable semver-ish tags from stdin, preserving each original tag string.
+# Accepts v-prefixed or bare MAJOR.MINOR.PATCH tags (for example v1.2.3 or
+# 1.2.3). Prereleases and non-semver tags are ignored for now; semver range
+# support can broaden this later with a dedicated semver tool/library.
+shiv_semver_tag_sort() {
+  sed -n -E 's/^v?([0-9]+)\.([0-9]+)\.([0-9]+)$/\1 \2 \3 &/p' \
+    | awk '{printf "%09d.%09d.%09d %s\n", $1, $2, $3, $4}' \
+    | sort \
+    | awk '{print $2}'
+}
+
+# Print the latest stable semver-ish tag from stdin.
+shiv_latest_semver_tag() {
+  shiv_semver_tag_sort | tail -1
+}
+
+# Print the latest stable semver-ish tag available on a remote URL.
+# Returns:
+#   0 when a release tag is found (tag printed to stdout)
+#   1 when the remote is reachable but has no stable semver-ish tags
+#   2 when the remote cannot be queried
+shiv_latest_release_tag_from_url() {
+  local remote_url="$1"
+  local tags_output latest
+
+  if ! tags_output=$(git ls-remote --tags "$remote_url" 2>&1); then
+    echo "Error: failed to query release tags for $remote_url" >&2
+    printf '%s\n' "$tags_output" | sed 's/^/  /' >&2
+    return 2
+  fi
+
+  latest=$(printf '%s\n' "$tags_output" \
+    | sed '/\^{}$/d; s|.*refs/tags/||' \
+    | shiv_latest_semver_tag)
+
+  if [ -z "$latest" ]; then
+    return 1
+  fi
+
+  printf '%s\n' "$latest"
+}
+
+# Print the latest stable semver-ish tag for a GitHub repo slug.
+shiv_latest_release_tag() {
+  local gh_repo="$1"
+  shiv_latest_release_tag_from_url "https://github.com/${gh_repo}.git"
+}
+
 # Detect whether a ref is a tag, branch, or commit SHA
 # Usage: shiv_detect_ref_type <github-repo-slug> <ref>
 # Prints "tag", "branch", or "commit" to stdout; returns 1 if unknown

@@ -6,7 +6,7 @@ set -euo pipefail
 source "$MISE_CONFIG_ROOT/lib/shim.sh"
 
 NAME="${usage_name}"
-CALLER_DIR="${CALLER_PWD:-${MISE_ORIGINAL_CWD:-$PWD}}"
+CALLER_DIR="${SHIV_CALLER_PWD:-${CALLER_PWD:-${MISE_ORIGINAL_CWD:-$PWD}}}"
 MISE_BIN="${MISE_BIN:-mise}"
 
 shiv_init_registry

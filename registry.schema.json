@@ -26,7 +26,12 @@
         },
         "ref": {
           "type": "string",
-          "description": "Git ref this package is pinned to (tag, branch, or commit SHA)."
+          "description": "Current Git ref for this package (release tag, branch, exact tag, or commit SHA)."
+        },
+        "refMode": {
+          "type": "string",
+          "enum": ["release", "branch", "tag", "commit", "local"],
+          "description": "Update intent for the ref: release channel, branch tracking, exact tag, exact commit, or local path."
         }
       },
       "required": ["path"],
