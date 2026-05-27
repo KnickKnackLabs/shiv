@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Bootstrap entry point — works without mise installed.
+set -eo pipefail
+
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+if ! command -v mise >/dev/null 2>&1; then
+  echo "shiv: mise not found — installing..." >&2
+  if ! command -v curl >/dev/null 2>&1; then
+    echo "shiv: curl required. Install it and retry." >&2
+    exit 1
+  fi
+  curl -fsSL https://mise.jdx.dev/install.sh | sh
+  export PATH="$HOME/.local/bin:$PATH"
+  if ! command -v mise >/dev/null 2>&1; then
+    echo "shiv: mise install failed. See: https://mise.jdx.dev" >&2
+    exit 1
+  fi
+fi
+
+mise trust -q "$REPO" 2>/dev/null || true
+exec mise -C "$REPO" run "$@"
