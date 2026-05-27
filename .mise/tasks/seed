@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+#MISE description="Generate a self-installable shell task in a target repo"
+#USAGE arg "<name>" help="Tool name to seed into the current repo"
+set -euo pipefail
+
+REPO_DIR="$(cd "$MISE_CONFIG_ROOT" && pwd)"
+source "$REPO_DIR/lib/shim.sh"
+
+NAME="${1:?shiv seed: <name> required}"
+TARGET="$PWD"
+TASKS_DIR="$TARGET/.mise/tasks"
+CALLER_PWD_VAR="$(shiv_caller_pwd_var_name "$NAME")"
+
+if [ "$TARGET" = "$REPO_DIR" ]; then
+  echo "shiv seed: cannot seed into shiv itself" >&2
+  exit 1
+fi
+
+if [ -f "$TASKS_DIR/shell" ]; then
+  echo "shiv seed: $TASKS_DIR/shell already exists — remove it first to re-seed" >&2
+  exit 1
+fi
+
+mkdir -p "$TASKS_DIR"
+
+cat > "$TASKS_DIR/shell" << SEED
+#!/usr/bin/env bash
+#MISE description="Output shell configuration for eval"
+set -eo pipefail
+
+_REPO="\$MISE_CONFIG_ROOT"
+_NAME="$NAME"
+_BIN_DIR="\${HOME}/.local/bin"
+_SHIM="\$_BIN_DIR/\$_NAME"
+
+mkdir -p "\$_BIN_DIR"
+{
+  printf '#!/usr/bin/env bash\n'
+  printf '# managed by shiv\n'
+  printf 'REPO="%s"\n' "\$_REPO"
+  printf '${CALLER_PWD_VAR}="\$PWD"\n'
+  printf 'exec mise -C "\$REPO" run "\$@"\n'
+} > "\$_SHIM"
+chmod +x "\$_SHIM"
+
+if [[ ":\${PATH}:" != *":\$_BIN_DIR:"* ]]; then
+  printf "export PATH='%s'\n" "\$_BIN_DIR:\${PATH}"
+fi
+SEED
+
+chmod +x "$TASKS_DIR/shell"
+echo "shiv seed: created $TASKS_DIR/shell for '$NAME'" >&2
+echo "shiv seed: to install, run: eval \"\$(mise -C $TARGET run -q shell)\"" >&2
