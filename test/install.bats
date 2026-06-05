@@ -435,6 +435,41 @@ MOCK
   [ "$(git -C "$SHIV_PACKAGES_DIR/alpha" rev-parse --abbrev-ref HEAD)" = "main" ]
 }
 
+@test "install: release install does not print detached-HEAD advice" {
+  create_remote_package "alpha" "v1.0.0" "v1.2.0"
+  configure_remote_source "alpha"
+
+  run run_install "alpha"
+  [ "$status" -eq 0 ]
+  ! echo "$output" | grep -q "detached HEAD"
+  ! echo "$output" | grep -q "advice.detachedHead"
+}
+
+@test "install: exact tag install does not print detached-HEAD advice" {
+  create_remote_package "alpha" "v1.0.0"
+  configure_remote_source "alpha"
+
+  run run_install "alpha@v1.0.0"
+  [ "$status" -eq 0 ]
+  [ "$(shiv_registry_ref_mode "alpha")" = "tag" ]
+  ! echo "$output" | grep -q "detached HEAD"
+  ! echo "$output" | grep -q "advice.detachedHead"
+}
+
+@test "install: switching release channel to a new tag does not print detached-HEAD advice" {
+  create_remote_package "alpha" "v1.0.0"
+  configure_remote_source "alpha"
+
+  run_install "alpha"
+  add_remote_package_tag "alpha" "v1.1.0"
+
+  run run_install "alpha"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q "✓ Installed alpha@v1.1.0"
+  ! echo "$output" | grep -q "detached HEAD"
+  ! echo "$output" | grep -q "advice.detachedHead"
+}
+
 @test "install: switching to branch tracking refuses local branch commits" {
   create_remote_package "alpha" "v1.0.0"
   configure_remote_source "alpha"

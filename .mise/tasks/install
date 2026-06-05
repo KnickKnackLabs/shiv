@@ -147,7 +147,9 @@ else
       if [ "$REF_MODE" = "branch" ]; then
         checkout_branch_ref "$REF"
       else
-        git -C "$TOOL_PATH" checkout "$REF" 2>&1 | sed 's/^/  /'
+        # Release/tag/commit checkouts are intentionally detached; mute Git's
+        # detached-HEAD advisory while still surfacing real checkout errors.
+        git -C "$TOOL_PATH" -c advice.detachedHead=false checkout "$REF" 2>&1 | sed 's/^/  /'
       fi
     elif [ "$REF_MODE" = "branch" ] && [ "$REF" != "$CURRENT_BRANCH" ]; then
       echo "  Branch changed (${CURRENT_BRANCH:-detached} → ${REF}), switching..."
@@ -177,12 +179,14 @@ else
         gum spin --title "  Cloning $GH_REPO@$REF..." --show-error -- git clone --branch "$REF" --single-branch "$CLONE_URL" "$TOOL_PATH"
         ;;
       tag)
-        gum spin --title "  Cloning $GH_REPO@$REF..." --show-error -- git clone --branch "$REF" --depth 1 --single-branch "$CLONE_URL" "$TOOL_PATH"
+        # Cloning a tag lands in detached HEAD by design — suppress the advisory.
+        gum spin --title "  Cloning $GH_REPO@$REF..." --show-error -- git -c advice.detachedHead=false clone --branch "$REF" --depth 1 --single-branch "$CLONE_URL" "$TOOL_PATH"
         ;;
       commit)
         gum spin --title "  Cloning $GH_REPO@$REF..." --show-error -- git clone --depth 1 --single-branch "$CLONE_URL" "$TOOL_PATH"
         git -C "$TOOL_PATH" fetch --depth 1 origin "$REF" 2>&1 | sed 's/^/  /'
-        git -C "$TOOL_PATH" checkout "$REF" 2>&1 | sed 's/^/  /'
+        # Commit checkout is intentionally detached — suppress the advisory.
+        git -C "$TOOL_PATH" -c advice.detachedHead=false checkout "$REF" 2>&1 | sed 's/^/  /'
         ;;
     esac
   fi
