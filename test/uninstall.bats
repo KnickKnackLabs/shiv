@@ -22,6 +22,9 @@ setup() {
   setup_shiv_on_path
 
   export SHIV_SKIP_CACHE=1
+
+  # bats runs with non-tty stdin; opt the confirm tests into the prompt branch.
+  export SHIV_ASSUME_TTY=1
 }
 
 
@@ -362,6 +365,16 @@ MOCK
   [ "$status" -eq 0 ]
   [ ! -f "$SHIV_BIN_DIR/alpha" ]
   echo "$output" | grep -q "✓ Uninstalled alpha"
+}
+
+@test "uninstall: non-interactive without --yes requires --yes" {
+  create_installed_package "alpha"
+  unset SHIV_ASSUME_TTY
+  run run_uninstall "alpha" </dev/null
+  [ "$status" -eq 1 ]
+  echo "$output" | grep -q -- "--yes"
+  # Nothing removed — the shim must survive
+  [ -f "$SHIV_BIN_DIR/alpha" ]
 }
 
 @test "uninstall: denied prompt cancels cleanly" {
