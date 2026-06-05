@@ -357,6 +357,17 @@ MOCK
 # Confirmation prompt
 # ============================================================================
 
+
+@test "uninstall: ambient usage_yes does not skip confirmation" {
+  create_installed_package "alpha"
+  mock_gum_confirm 1
+
+  run env usage_yes=true shiv uninstall alpha
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q "Cancelled."
+  [ -f "$SHIV_BIN_DIR/alpha" ]
+}
+
 @test "uninstall: confirmed prompt proceeds with uninstall" {
   create_installed_package "alpha"
   mock_gum_confirm 0
