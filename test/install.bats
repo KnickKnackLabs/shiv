@@ -443,6 +443,7 @@ MOCK
   [ "$status" -eq 0 ]
   ! echo "$output" | grep -q "detached HEAD"
   ! echo "$output" | grep -q "advice.detachedHead"
+  ! echo "$output" | grep -q "is not a commit"
 }
 
 @test "install: exact tag install does not print detached-HEAD advice" {
@@ -454,6 +455,19 @@ MOCK
   [ "$(shiv_registry_ref_mode "alpha")" = "tag" ]
   ! echo "$output" | grep -q "detached HEAD"
   ! echo "$output" | grep -q "advice.detachedHead"
+  ! echo "$output" | grep -q "is not a commit"
+}
+
+@test "install: annotated tag install emits no 'is not a commit' warning" {
+  # create_remote_package tags are annotated (git tag -a), like signed releases.
+  create_remote_package "alpha" "v1.0.0" "v1.2.0"
+  configure_remote_source "alpha"
+
+  run run_install "alpha"
+  [ "$status" -eq 0 ]
+  ! echo "$output" | grep -q "is not a commit"
+  # Tag ref must still resolve locally (used by list/describe) at the right commit
+  [ "$(git -C "$SHIV_PACKAGES_DIR/alpha" describe --tags --exact-match HEAD)" = "v1.2.0" ]
 }
 
 @test "install: switching release channel to a new tag does not print detached-HEAD advice" {

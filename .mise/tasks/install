@@ -179,8 +179,13 @@ else
         gum spin --title "  Cloning $GH_REPO@$REF..." --show-error -- git clone --branch "$REF" --single-branch "$CLONE_URL" "$TOOL_PATH"
         ;;
       tag)
-        # Cloning a tag lands in detached HEAD by design — suppress the advisory.
-        gum spin --title "  Cloning $GH_REPO@$REF..." --show-error -- git -c advice.detachedHead=false clone --branch "$REF" --depth 1 --single-branch "$CLONE_URL" "$TOOL_PATH"
+        # `clone --branch <tag>` emits "warning: refs/tags/X is not a commit!" for
+        # annotated/signed tags. Clone the default branch, then fetch the tag
+        # explicitly (creates the local tag ref that list/describe rely on) and
+        # check it out; suppress the detached-HEAD advisory.
+        gum spin --title "  Cloning $GH_REPO@$REF..." --show-error -- git clone --depth 1 --single-branch "$CLONE_URL" "$TOOL_PATH"
+        git -C "$TOOL_PATH" fetch --depth 1 origin tag "$REF" 2>&1 | sed 's/^/  /'
+        git -C "$TOOL_PATH" -c advice.detachedHead=false checkout "$REF" 2>&1 | sed 's/^/  /'
         ;;
       commit)
         gum spin --title "  Cloning $GH_REPO@$REF..." --show-error -- git clone --depth 1 --single-branch "$CLONE_URL" "$TOOL_PATH"
