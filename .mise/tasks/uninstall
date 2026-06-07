@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #MISE description="Remove a tool's shim and deregister it"
 #USAGE arg "<name>" help="Package name to remove"
-#USAGE flag "-y --yes" help="Skip confirmation prompt"
-#USAGE flag "--force" help="Override safety checks (e.g., uninstalling shiv)"
+#USAGE flag "-y --yes" default=#false help="Skip confirmation prompt"
+#USAGE flag "--force" default=#false help="Override safety checks (e.g., uninstalling shiv)"
 set -eo pipefail
 
 source "$MISE_CONFIG_ROOT/lib/shim.sh"

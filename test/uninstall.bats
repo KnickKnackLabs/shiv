@@ -377,6 +377,24 @@ MOCK
   [ -f "$SHIV_BIN_DIR/alpha" ]
 }
 
+@test "uninstall: inherited usage_yes does not bypass confirmation" {
+  create_installed_package "alpha"
+  unset SHIV_ASSUME_TTY
+  usage_yes=true run run_uninstall "alpha" </dev/null
+  [ "$status" -eq 1 ]
+  echo "$output" | grep -q -- "--yes"
+  [ -f "$SHIV_BIN_DIR/alpha" ]
+}
+
+@test "uninstall: inherited usage_force does not bypass confirmation" {
+  create_installed_package "alpha"
+  unset SHIV_ASSUME_TTY
+  usage_force=true run run_uninstall "alpha" </dev/null
+  [ "$status" -eq 1 ]
+  echo "$output" | grep -q -- "--yes"
+  [ -f "$SHIV_BIN_DIR/alpha" ]
+}
+
 @test "uninstall: denied prompt cancels cleanly" {
   create_installed_package "alpha"
   mock_gum_confirm 1
