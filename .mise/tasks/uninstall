@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #MISE description="Remove a tool's shim and deregister it"
 #USAGE arg "<name>" help="Package name to remove"
-#USAGE flag "-y --yes" help="Skip confirmation prompt"
-#USAGE flag "--force" help="Override safety checks (e.g., uninstalling shiv)"
+#USAGE flag "-y --yes" default=#false help="Skip confirmation prompt"
+#USAGE flag "--force" default=#false help="Override safety checks (e.g., uninstalling shiv)"
 set -eo pipefail
 
 source "$MISE_CONFIG_ROOT/lib/shim.sh"
@@ -75,8 +75,14 @@ echo ""
   echo "ALIASES${SEP}${alias_display}"
 } | gum table -s "$SEP" -c "KEY,VALUE" -p --border normal
 
-# Confirm before proceeding (unless -y or --force)
+# Confirm before proceeding (unless -y or --force). With no controlling TTY
+# there's no way to prompt, so require --yes explicitly instead of letting gum
+# fail with an opaque /dev/tty error.
 if [ "$YES" != "true" ]; then
+  if [ ! -t 0 ] && [ -z "${SHIV_ASSUME_TTY:-}" ]; then
+    echo "  ✗ No TTY available — re-run with --yes to skip confirmation" >&2
+    exit 1
+  fi
   echo ""
   "${GUM:-gum}" confirm "Proceed?" || { echo "Cancelled."; exit 0; }
 fi
