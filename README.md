@@ -8,8 +8,8 @@
 
 ![shell: bash](https://img.shields.io/badge/shell-bash-4EAA25?style=flat&logo=gnubash&logoColor=white)
 [![runtime: mise](https://img.shields.io/badge/runtime-mise-7c3aed?style=flat)](https://mise.jdx.dev)
-![tests: 294 passing](https://img.shields.io/badge/tests-294%20passing-brightgreen?style=flat)
-![packages: 39](https://img.shields.io/badge/packages-39-blue?style=flat)
+![tests: 277 passing](https://img.shields.io/badge/tests-277%20passing-brightgreen?style=flat)
+![packages: 42](https://img.shields.io/badge/packages-42-blue?style=flat)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat)](LICENSE)
 
 </div>
@@ -148,7 +148,7 @@ cd shiv && mise trust && mise install
 mise run test
 ```
 
-Tests use [BATS](https://github.com/bats-core/bats-core) — 294 tests across 14 suites.
+Tests use [BATS](https://github.com/bats-core/bats-core) — the default run covers 277 tests across 14 suites. Completion tests run separately.
 
 <div align="center">
 
