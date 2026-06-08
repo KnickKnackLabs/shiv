@@ -9,7 +9,7 @@
 ![shell: bash](https://img.shields.io/badge/shell-bash-4EAA25?style=flat&logo=gnubash&logoColor=white)
 [![runtime: mise](https://img.shields.io/badge/runtime-mise-7c3aed?style=flat)](https://mise.jdx.dev)
 ![tests: 277 passing](https://img.shields.io/badge/tests-277%20passing-brightgreen?style=flat)
-![packages: 42](https://img.shields.io/badge/packages-42-blue?style=flat)
+![packages: 43](https://img.shields.io/badge/packages-43-blue?style=flat)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat)](LICENSE)
 
 </div>
