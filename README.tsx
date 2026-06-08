@@ -23,7 +23,8 @@ const packageCount = Object.keys(packages).length;
 // Count test files and test cases
 const testDir = join(REPO_DIR, "test");
 const testFiles = readdirSync(testDir).filter((f) => f.endsWith(".bats"));
-const testCount = testFiles.reduce((sum, f) => {
+const defaultTestFiles = testFiles.filter((f) => f !== "completions.bats");
+const testCount = defaultTestFiles.reduce((sum, f) => {
   const content = readFileSync(join(testDir, f), "utf-8");
   return sum + (content.match(/@test /g)?.length ?? 0);
 }, 0);
@@ -230,8 +231,8 @@ cd shiv && mise trust && mise install
 mise run test`}</CodeBlock>
 
       <Paragraph>
-        Tests use <Link href="https://github.com/bats-core/bats-core">BATS</Link> — {testCount} tests
-        across {testFiles.length} suites.
+        Tests use <Link href="https://github.com/bats-core/bats-core">BATS</Link> — the default run covers {testCount} tests
+        across {defaultTestFiles.length} suites. Completion tests run separately.
       </Paragraph>
     </Section>
 
