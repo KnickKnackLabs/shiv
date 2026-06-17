@@ -179,6 +179,54 @@ update_release() {
   fi
 }
 
+# Check if the named package is also declared as shiv:<name> in a nearby mise.toml
+# and warn the user about the repo-scoped vs global install difference.
+check_repo_scope_for_update() {
+  local name="$1"
+  local mise_toml=""
+  local dir
+
+  # Look for mise.toml or .mise.toml, starting from MISE_PROJECT_ROOT or PWD
+  dir="${MISE_PROJECT_ROOT:-$PWD}"
+  while [ -n "$dir" ]; do
+    if [ -f "$dir/mise.toml" ]; then
+      mise_toml="$dir/mise.toml"
+      break
+    fi
+    if [ -f "$dir/.mise.toml" ]; then
+      mise_toml="$dir/.mise.toml"
+      break
+    fi
+    # Stop at filesystem root
+    parent="$(dirname "$dir")"
+    [ "$parent" = "$dir" ] && break
+    dir="$parent"
+  done
+
+  [ -z "$mise_toml" ] && return 0
+
+  local declaration
+  declaration=$(grep -E "shiv:${name}[[:space:]]*=" "$mise_toml" | head -1 || true)
+  [ -z "$declaration" ] && return 0
+
+  # Extract the declared version/pin
+  local version
+  version=$(echo "$declaration" | sed 's/.*=[[:space:]]*"\(.*\)".*/\1/')
+
+  echo ""
+  echo "  ⚠  $name is also declared in $(realpath "$mise_toml" 2>/dev/null || echo "$mise_toml")"
+  echo "     shiv:<name> = $version"
+  echo ""
+  echo "     'shiv update $name' updates the global shiv install."
+  echo "     To refresh the repo-scoped install that mise actually uses:"
+  echo ""
+  echo "       mise install shiv:${name}@${version}"
+  if [ "$version" != "latest" ]; then
+    echo "       mise trust \"\$(mise where shiv:${name})\""
+  fi
+  echo ""
+}
+
 # Update a single package, appending result to RESULTS array.
 update_one() {
   local name="$1"
@@ -246,6 +294,7 @@ update_one() {
 
 if [ -n "$TARGET" ]; then
   echo "Updating $TARGET..."
+  check_repo_scope_for_update "$TARGET"
   rc=0
   update_one "$TARGET" || rc=$?
 

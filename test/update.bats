@@ -328,6 +328,86 @@ extract_column() {
 }
 
 # ============================================================================
+# Repo-scoped detection (shiv:<name> in mise.toml)
+# ============================================================================
+
+@test "update: warns when package declared as shiv:<name> in repo mise.toml" {
+  create_test_repo_with_remote "alpha"
+  register_branch_package "alpha"
+  shiv_create_shim "alpha" "$SHIV_PACKAGES_DIR/alpha"
+
+  # Create a mise.toml in the test directory declaring the package
+  cat > "$PWD/mise.toml" <<'EOF'
+[tools]
+"shiv:alpha" = "latest"
+EOF
+
+  run run_update "alpha"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q "also declared in"
+  echo "$output" | grep -q "shiv:alpha"
+  echo "$output" | grep -q "mise install shiv:alpha@latest"
+}
+
+@test "update: warns with specific version from mise.toml" {
+  create_test_repo_with_remote "alpha"
+  register_branch_package "alpha"
+  shiv_create_shim "alpha" "$SHIV_PACKAGES_DIR/alpha"
+
+  cat > "$PWD/mise.toml" <<'EOF'
+[tools]
+"shiv:alpha" = "0.1"
+EOF
+
+  run run_update "alpha"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q "also declared in"
+  echo "$output" | grep -q "shiv:alpha = 0.1"
+  echo "$output" | grep -q "mise install shiv:alpha@0.1"
+  echo "$output" | grep -q "mise trust"
+}
+
+@test "update: no warning when package not in mise.toml" {
+  create_test_repo_with_remote "alpha"
+  register_branch_package "alpha"
+  shiv_create_shim "alpha" "$SHIV_PACKAGES_DIR/alpha"
+
+  cat > "$PWD/mise.toml" <<'EOF'
+[tools]
+"shiv:other" = "latest"
+EOF
+
+  run run_update "alpha"
+  [ "$status" -eq 0 ]
+  ! echo "$output" | grep -q "also declared in"
+}
+
+@test "update: no warning when no mise.toml exists" {
+  create_test_repo_with_remote "alpha"
+  register_branch_package "alpha"
+  shiv_create_shim "alpha" "$SHIV_PACKAGES_DIR/alpha"
+
+  run run_update "alpha"
+  [ "$status" -eq 0 ]
+  ! echo "$output" | grep -q "also declared in"
+}
+
+@test "update: no warning during bulk update (all packages)" {
+  create_test_repo_with_remote "alpha"
+  register_branch_package "alpha"
+  shiv_create_shim "alpha" "$SHIV_PACKAGES_DIR/alpha"
+
+  cat > "$PWD/mise.toml" <<'EOF'
+[tools]
+"shiv:alpha" = "latest"
+EOF
+
+  run run_update
+  [ "$status" -eq 0 ]
+  ! echo "$output" | grep -q "also declared in"
+}
+
+# ============================================================================
 # Alias resolution
 # ============================================================================
 
