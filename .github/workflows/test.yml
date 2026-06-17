@@ -40,7 +40,7 @@ jobs:
       - name: Install tools
         run: |
           mise trust
-          mise install bats
+          mise install gum bats
 
       - name: Run tests
         run: mise run test

@@ -186,8 +186,9 @@ check_repo_scope_for_update() {
   local mise_toml=""
   local dir
 
-  # Look for mise.toml or .mise.toml, starting from MISE_PROJECT_ROOT or PWD
-  dir="${MISE_PROJECT_ROOT:-$PWD}"
+  # Look for mise.toml or .mise.toml, starting from SHIV_CALLER_PWD (set by shim
+  # to the user's original working directory), falling back to MISE_PROJECT_ROOT or PWD.
+  dir="${SHIV_CALLER_PWD:-${MISE_PROJECT_ROOT:-$PWD}}"
   while [ -n "$dir" ]; do
     if [ -f "$dir/mise.toml" ]; then
       mise_toml="$dir/mise.toml"
@@ -206,7 +207,7 @@ check_repo_scope_for_update() {
   [ -z "$mise_toml" ] && return 0
 
   local declaration
-  declaration=$(grep -E "shiv:${name}[[:space:]]*=" "$mise_toml" | head -1 || true)
+  declaration=$(grep -E "\"?shiv:${name}\"?[[:space:]]*=" "$mise_toml" | head -1 || true)
   [ -z "$declaration" ] && return 0
 
   # Extract the declared version/pin
@@ -215,7 +216,7 @@ check_repo_scope_for_update() {
 
   echo ""
   echo "  ⚠  $name is also declared in $(realpath "$mise_toml" 2>/dev/null || echo "$mise_toml")"
-  echo "     shiv:<name> = $version"
+  echo "     shiv:${name} = $version"
   echo ""
   echo "     'shiv update $name' updates the global shiv install."
   echo "     To refresh the repo-scoped install that mise actually uses:"
