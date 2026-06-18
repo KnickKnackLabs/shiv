@@ -91,8 +91,20 @@ _shiv_check_cwd() {
   fi
 }
 
-# NOTE: the mise tasks | jq pipeline below duplicates shiv_cache_task_map()
-# in lib/cache.sh (shim self-containment). If you change the format, update both.
+_shiv_package_tasks_json() {
+  unset MISE_OVERRIDE_CONFIG_FILENAMES
+  mise tasks --json "\$@" -C "\$REPO" 2>/dev/null
+}
+
+_shiv_exec_package_mise() {
+  unset MISE_OVERRIDE_CONFIG_FILENAMES
+  exec mise -C "\$REPO" "\$@"
+}
+
+# NOTE: the task-map transformation duplicates shiv_cache_task_map() in
+# lib/cache.sh (shim self-containment). If you change package-task cache
+# invariants, update both places: scrub caller-scoped mise config overrides and
+# exclude global mise tasks.
 _shiv_ensure_task_map() {
   [ -f "\$SHIV_TASK_MAP" ] && return 0
   if ! command -v jq >/dev/null 2>&1; then
@@ -101,8 +113,17 @@ _shiv_ensure_task_map() {
   fi
   mkdir -p "\$(dirname "\$SHIV_TASK_MAP")"
   local tmp="\$SHIV_TASK_MAP.tmp"
-  if ! mise tasks --json --hidden -C "\$REPO" 2>/dev/null \\
-    | jq -r '.[].name | gsub(":"; " ")' > "\$tmp" 2>/dev/null; then
+  local tasks_json
+  if ! tasks_json=\$(_shiv_package_tasks_json --hidden); then
+    rm -f "\$tmp"
+    return 0
+  fi
+  if [ -z "\$tasks_json" ]; then
+    rm -f "\$tmp"
+    return 0
+  fi
+  if ! printf '%s\n' "\$tasks_json" \\
+    | jq -r '.[] | select(.global != true) | .name | gsub(":"; " ")' > "\$tmp" 2>/dev/null; then
     rm -f "\$tmp"
     return 0
   fi
@@ -124,10 +145,15 @@ _shiv_render_tasks() {
     return 1
   fi
 
-  local tmp repo_prefix
+  local tmp repo_prefix tasks_json
   tmp=\$(mktemp)
   repo_prefix="\$(cd "\$REPO" && pwd -P)/"
-  if ! mise -C "\$REPO" tasks --local --json 2>/dev/null \
+  if ! tasks_json=\$(_shiv_package_tasks_json --local); then
+    rm -f "\$tmp"
+    echo "$name: failed to render package-local task list" >&2
+    return 1
+  fi
+  if ! printf '%s\n' "\$tasks_json" \
     | jq -r --arg repo_prefix "\$repo_prefix" '[.[] | select(.hide != true) | select(((.source // .file // "") | startswith(\$repo_prefix))) | (.name | split(":")) as \$p | {
         group: (if (\$p | length) > 1 then \$p[0] else "root" end),
         task: (if (\$p | length) > 1 then (\$p[1:] | join(":")) else .name end),
@@ -166,7 +192,7 @@ _shiv_render_tasks() {
 
 _shiv_handle_tasks() {
   if [ "\$HAS_TASKS_TASK" = "true" ]; then
-    exec mise -C "\$REPO" run -q "\$@"
+    _shiv_exec_package_mise run -q "\$@"
   fi
   _shiv_render_tasks
   local rc=\$?
@@ -181,7 +207,7 @@ _shiv_handle_help() {
   # Package-owned help wins. This lets tools expose richer help than the
   # generic mise task list while keeping the shim-level interception.
   if [ "\$HAS_HELP_TASK" = "true" ]; then
-    exec mise -C "\$REPO" run -q help
+    _shiv_exec_package_mise run -q help
   fi
 
   # Single-command tools (.mise/tasks/<name>) should show the command help,
@@ -189,9 +215,9 @@ _shiv_handle_help() {
   # menus/catch-alls where task-list help is still the safer default.
   if [ -n "\$DEFAULT_TASK" ] && [ "\$DEFAULT_TASK" != "_default" ]; then
     if [ "\$help_arg" = "help" ]; then
-      exec mise -C "\$REPO" run -q "\$DEFAULT_TASK" help
+      _shiv_exec_package_mise run -q "\$DEFAULT_TASK" help
     else
-      exec mise -C "\$REPO" run -q "\$DEFAULT_TASK" "\$help_arg"
+      _shiv_exec_package_mise run -q "\$DEFAULT_TASK" "\$help_arg"
     fi
   fi
 
@@ -229,7 +255,7 @@ case "\${1:-}" in
     # --- Default task handling ---
     # No args: run default task directly.
     if [ -n "\$DEFAULT_TASK" ] && [ -z "\${1:-}" ]; then
-      exec mise -C "\$REPO" run -q "\$DEFAULT_TASK"
+      _shiv_exec_package_mise run -q "\$DEFAULT_TASK"
     fi
 
     # "--" as first arg: explicit disambiguation — send everything
@@ -237,9 +263,9 @@ case "\${1:-}" in
     if [ -n "\$DEFAULT_TASK" ] && [ "\${1:-}" = "--" ]; then
       shift
       if [ \$# -gt 0 ]; then
-        exec mise -C "\$REPO" run -q "\$DEFAULT_TASK" "\$@"
+        _shiv_exec_package_mise run -q "\$DEFAULT_TASK" "\$@"
       else
-        exec mise -C "\$REPO" run -q "\$DEFAULT_TASK"
+        _shiv_exec_package_mise run -q "\$DEFAULT_TASK"
       fi
     fi
 
@@ -271,18 +297,18 @@ case "\${1:-}" in
       # Guard: only expand SHIV_RESOLVED_ARGS when non-empty.
       # bash <4.4 treats "\${empty_array[@]}" as unbound under set -u.
       if [ \${#SHIV_RESOLVED_ARGS[@]} -gt 0 ]; then
-        exec mise -C "\$REPO" run -q "\$SHIV_RESOLVED_TASK" "\${SHIV_RESOLVED_ARGS[@]}"
+        _shiv_exec_package_mise run -q "\$SHIV_RESOLVED_TASK" "\${SHIV_RESOLVED_ARGS[@]}"
       else
-        exec mise -C "\$REPO" run -q "\$SHIV_RESOLVED_TASK"
+        _shiv_exec_package_mise run -q "\$SHIV_RESOLVED_TASK"
       fi
     elif [ "\$_shiv_rc" -eq 1 ]; then
       exit 1  # ambiguous — error already printed to stderr
     fi
     # rc=2 or no task map: fall through to default task or mise
     if [ -n "\$DEFAULT_TASK" ]; then
-      exec mise -C "\$REPO" run -q "\$DEFAULT_TASK" "\$@"
+      _shiv_exec_package_mise run -q "\$DEFAULT_TASK" "\$@"
     fi
-    exec mise -C "\$REPO" run -q "\$@"
+    _shiv_exec_package_mise run -q "\$@"
     ;;
 esac
 SCRIPT

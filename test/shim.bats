@@ -389,9 +389,7 @@ TASK
 # test "cache miss generates task map on the fly" covers that path.
 populate_task_map() {
   local name="$1" repo_dir="$2"
-  mkdir -p "$SHIV_CACHE_DIR/tasks"
-  mise tasks --json --hidden -C "$repo_dir" 2>/dev/null \
-    | jq -r '.[].name | gsub(":"; " ")' > "$SHIV_CACHE_DIR/tasks/$name"
+  SHIV_SKIP_CACHE= shiv_cache_task_map "$name" "$repo_dir"
 }
 
 @test "shim: spaces resolve to colons end-to-end" {
@@ -477,6 +475,33 @@ populate_task_map() {
   [[ "$output" == *"DEV_TEST_UNIT"* ]]
 
   [ -f "$SHIV_CACHE_DIR/tasks/mytool" ]
+}
+
+@test "shim: cache miss and execution ignore inherited mise config override" {
+  local repo_dir parent_config
+  repo_dir=$(create_resolve_repo "mytool")
+  shiv install mytool "$repo_dir" 2>/dev/null
+
+  parent_config="$TEST_HOME/parent-config.toml"
+  cat > "$parent_config" <<'TOML'
+[tasks.parent-only]
+description = "Parent task should not leak"
+run = "echo PARENT_ONLY"
+TOML
+  mise trust "$parent_config" 2>/dev/null
+
+  [ ! -f "$SHIV_CACHE_DIR/tasks/mytool" ]
+
+  run env -u SHIV_SKIP_CACHE \
+    MISE_OVERRIDE_CONFIG_FILENAMES="$parent_config" \
+    XDG_CACHE_HOME="$TEST_HOME/.cache" \
+    "$SHIV_BIN_DIR/mytool" dev test unit
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"DEV_TEST_UNIT"* ]]
+  [[ "$output" != *"PARENT_ONLY"* ]]
+
+  grep -q "^dev test unit$" "$SHIV_CACHE_DIR/tasks/mytool"
+  ! grep -q "parent-only" "$SHIV_CACHE_DIR/tasks/mytool"
 }
 
 @test "shim: unresolved input falls through to mise" {

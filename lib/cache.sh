@@ -3,6 +3,19 @@
 
 SHIV_CACHE_DIR="${SHIV_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/shiv}"
 
+# Return package-local task metadata from mise without inheriting caller-scoped
+# config overrides. Shiv caches describe the managed package, not the repo or CI
+# wrapper that happened to invoke shiv.
+shiv_package_tasks_json() {
+  local repo_dir="$1"
+  shift
+
+  (
+    unset MISE_OVERRIDE_CONFIG_FILENAMES
+    mise tasks --json "$@" -C "$repo_dir" 2>/dev/null
+  )
+}
+
 # Cache task list for a tool (name<TAB>description per line)
 # Writes atomically — only replaces cache if new content is non-empty,
 # so a failed mise invocation doesn't leave an empty cache file.
@@ -14,10 +27,7 @@ shiv_cache_tasks() {
   local tmp="$cache.tmp"
   mkdir -p "$SHIV_CACHE_DIR/completions"
   local tasks_json
-  if ! tasks_json=$(
-    unset MISE_OVERRIDE_CONFIG_FILENAMES
-    mise tasks --json -C "$repo_dir" 2>/dev/null
-  ); then
+  if ! tasks_json=$(shiv_package_tasks_json "$repo_dir"); then
     rm -f "$tmp"
     return 0
   fi
@@ -55,10 +65,7 @@ shiv_cache_task_map() {
   local tmp="$cache.tmp"
   mkdir -p "$SHIV_CACHE_DIR/tasks"
   local tasks_json
-  if ! tasks_json=$(
-    unset MISE_OVERRIDE_CONFIG_FILENAMES
-    mise tasks --json --hidden -C "$repo_dir" 2>/dev/null
-  ); then
+  if ! tasks_json=$(shiv_package_tasks_json "$repo_dir" --hidden); then
     rm -f "$tmp"
     return 0
   fi
