@@ -126,6 +126,7 @@ record_dependency_mise_calls() {
   local real_mise
   real_mise="$(command -v mise)"
   export MISE_CALL_LOG="$TEST_HOME/mise-calls.log"
+  export MISE_ENV_CALL_LOG="$TEST_HOME/mise-env-calls.log"
 
   cat > "$BATS_TEST_TMPDIR/mock-bin/mise" <<MOCK
 #!/usr/bin/env bash
@@ -133,6 +134,7 @@ if [ "\${1:-}" = "-C" ] && [ "\${2:-}" = "$REPO_DIR" ]; then
   exec "$real_mise" "\$@"
 fi
 printf '%s\t%s\n' "\$PWD" "\$*" >> "$MISE_CALL_LOG"
+printf '%s\t%s\t%s\n' "\$PWD" "\${MISE_OVERRIDE_CONFIG_FILENAMES-}" "\$*" >> "$MISE_ENV_CALL_LOG"
 exit 0
 MOCK
   chmod +x "$BATS_TEST_TMPDIR/mock-bin/mise"
@@ -181,6 +183,21 @@ MOCK
 
   grep -F "$(printf '%s\ttrust -q' "$repo_dir")" "$MISE_CALL_LOG"
   grep -F "$(printf '%s\tinstall -q' "$repo_dir")" "$MISE_CALL_LOG"
+}
+
+@test "install: dependency setup clears inherited mise config override" {
+  local repo_dir parent_config
+  repo_dir=$(create_local_repo "myapp")
+  record_dependency_mise_calls
+  parent_config="$TEST_HOME/parent-config.toml"
+  printf '[settings]\nexperimental = true\n' > "$parent_config"
+  export MISE_OVERRIDE_CONFIG_FILENAMES="$parent_config"
+
+  run bash -c "cd '$REPO_DIR' && MISE_CONFIG_ROOT='$REPO_DIR' usage_name='myapp' usage_path='$repo_dir' usage_as='' .mise/tasks/install"
+  [ "$status" -eq 0 ]
+
+  grep -F "$(printf '%s\t\ttrust -q' "$repo_dir")" "$MISE_ENV_CALL_LOG"
+  grep -F "$(printf '%s\t\tinstall -q' "$repo_dir")" "$MISE_ENV_CALL_LOG"
 }
 
 @test "install: shows branch in summary card" {

@@ -13,9 +13,24 @@ shiv_cache_tasks() {
   local cache="$SHIV_CACHE_DIR/completions/$name.cache"
   local tmp="$cache.tmp"
   mkdir -p "$SHIV_CACHE_DIR/completions"
-  mise tasks --json -C "$repo_dir" 2>/dev/null \
-    | jq -r '.[] | select(.hide == false) | "\(.name)\t\(.description)"' \
-    > "$tmp"
+  local tasks_json
+  if ! tasks_json=$(
+    unset MISE_OVERRIDE_CONFIG_FILENAMES
+    mise tasks --json -C "$repo_dir" 2>/dev/null
+  ); then
+    rm -f "$tmp"
+    return 0
+  fi
+  if [ -z "$tasks_json" ]; then
+    rm -f "$tmp"
+    return 0
+  fi
+  if ! printf '%s\n' "$tasks_json" \
+    | jq -r '.[] | select(.global != true) | select(.hide == false) | "\(.name)\t\(.description)"' \
+    > "$tmp"; then
+    rm -f "$tmp"
+    return 0
+  fi
   if [ -s "$tmp" ]; then
     mv "$tmp" "$cache"
   else
@@ -39,8 +54,20 @@ shiv_cache_task_map() {
   local cache="$SHIV_CACHE_DIR/tasks/$name"
   local tmp="$cache.tmp"
   mkdir -p "$SHIV_CACHE_DIR/tasks"
-  if ! mise tasks --json --hidden -C "$repo_dir" 2>/dev/null \
-    | jq -r '.[].name | gsub(":"; " ")' \
+  local tasks_json
+  if ! tasks_json=$(
+    unset MISE_OVERRIDE_CONFIG_FILENAMES
+    mise tasks --json --hidden -C "$repo_dir" 2>/dev/null
+  ); then
+    rm -f "$tmp"
+    return 0
+  fi
+  if [ -z "$tasks_json" ]; then
+    rm -f "$tmp"
+    return 0
+  fi
+  if ! printf '%s\n' "$tasks_json" \
+    | jq -r '.[] | select(.global != true) | .name | gsub(":"; " ")' \
     > "$tmp"; then
     rm -f "$tmp"
     return 0
