@@ -200,6 +200,47 @@ MOCK
   grep -F "$(printf '%s\t\tinstall -q' "$repo_dir")" "$MISE_ENV_CALL_LOG"
 }
 
+@test "install: generated shim clears inherited mise config override at runtime" {
+  local repo_dir parent_config task_map
+  repo_dir="$TEST_HOME/repos/myapp"
+  mkdir -p "$repo_dir/.mise/tasks/hello"
+  git -C "$repo_dir" init -q -b main
+  git -C "$repo_dir" config user.email "test@test.com"
+  git -C "$repo_dir" config user.name "Test"
+  printf '[tools]\n' > "$repo_dir/mise.toml"
+  cat > "$repo_dir/.mise/tasks/hello/world" <<'TASK'
+#!/usr/bin/env bash
+echo package-world
+TASK
+  chmod +x "$repo_dir/.mise/tasks/hello/world"
+  git -C "$repo_dir" add .
+  git -C "$repo_dir" commit -q -m "init"
+
+  export XDG_CACHE_HOME="$TEST_HOME/.cache"
+  run_install "myapp" "$repo_dir"
+  rm -f "$SHIV_CACHE_DIR/tasks/myapp"
+
+  parent_config="$TEST_HOME/parent-config.toml"
+  cat > "$parent_config" <<'TOML'
+[tasks.parent]
+run = "echo parent-task-ran"
+TOML
+  mise trust "$parent_config" 2>/dev/null
+  export MISE_OVERRIDE_CONFIG_FILENAMES="$parent_config"
+
+  run "$SHIV_BIN_DIR/myapp" hello world
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q "package-world"
+
+  task_map="$SHIV_CACHE_DIR/tasks/myapp"
+  grep -q "^hello world$" "$task_map"
+  ! grep -q "^parent$" "$task_map"
+
+  run "$SHIV_BIN_DIR/myapp" parent
+  [ "$status" -ne 0 ]
+  ! echo "$output" | grep -q "parent-task-ran"
+}
+
 @test "install: shows branch in summary card" {
   local repo_dir="$TEST_HOME/repos/branched"
   mkdir -p "$repo_dir"
