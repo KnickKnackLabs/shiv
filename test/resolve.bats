@@ -70,6 +70,32 @@ EOF
   grep -q "^secret$" "$SHIV_CACHE_DIR/tasks/fakepkg"
 }
 
+@test "task-map: cache excludes global mise tasks" {
+  local fake_dir fake_home
+  fake_dir="$TEST_HOME/package-pkg"
+  fake_home="$TEST_HOME/fake-home"
+  mkdir -p "$fake_dir/.mise/tasks" "$fake_home/.config/mise"
+  cat > "$fake_dir/mise.toml" <<'EOF'
+[tools]
+EOF
+  cat > "$fake_dir/.mise/tasks/package-task" <<'TASK'
+#!/usr/bin/env bash
+echo package
+TASK
+  chmod +x "$fake_dir/.mise/tasks/package-task"
+  cat > "$fake_home/.config/mise/config.toml" <<'EOF'
+[tasks.global-task]
+run = "echo global"
+EOF
+  HOME="$fake_home" mise trust "$fake_home/.config/mise/config.toml" 2>/dev/null
+  HOME="$fake_home" mise trust "$fake_dir/mise.toml" 2>/dev/null
+
+  HOME="$fake_home" shiv_cache_task_map "packagepkg" "$fake_dir"
+
+  grep -q "^package-task$" "$SHIV_CACHE_DIR/tasks/packagepkg"
+  ! grep -q "global-task" "$SHIV_CACHE_DIR/tasks/packagepkg"
+}
+
 @test "task-map: deep nesting translates all colons to spaces" {
   local fake_dir="$TEST_HOME/deep-pkg"
   mkdir -p "$fake_dir/.mise/tasks/a/b/c"

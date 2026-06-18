@@ -7,11 +7,11 @@ source "$REPO_DIR/lib/registry.sh"
 
 shiv_init_registry
 
-if ! command -v jsonschema &>/dev/null; then
+if ! mise which jsonschema &>/dev/null; then
   echo "Error: jsonschema not found" >&2
   echo "Install with: mise install jsonschema" >&2
   exit 1
 fi
 
-jsonschema validate "$REPO_DIR/registry.schema.json" "$SHIV_REGISTRY"
+mise x -- jsonschema validate "$REPO_DIR/registry.schema.json" "$SHIV_REGISTRY"
 echo "✓ Registry is valid"

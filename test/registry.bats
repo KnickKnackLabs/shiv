@@ -333,49 +333,38 @@ setup() {
 # Schema validation
 # ============================================================================
 
-@test "schema: empty registry is valid" {
-  if ! command -v jsonschema &>/dev/null; then
+validate_registry_schema() {
+  if ! mise which jsonschema &>/dev/null; then
     skip "jsonschema not found"
   fi
-  jsonschema validate "$REPO_DIR/registry.schema.json" "$SHIV_REGISTRY"
+  mise x -- jsonschema validate "$REPO_DIR/registry.schema.json" "$SHIV_REGISTRY"
+}
+
+@test "schema: empty registry is valid" {
+  validate_registry_schema
 }
 
 @test "schema: registry with package and aliases is valid" {
-  if ! command -v jsonschema &>/dev/null; then
-    skip "jsonschema not found"
-  fi
   shiv_register "foo" "/path/to/foo" "f"
-  jsonschema validate "$REPO_DIR/registry.schema.json" "$SHIV_REGISTRY"
+  validate_registry_schema
 }
 
 @test "schema: registry without aliases is valid" {
-  if ! command -v jsonschema &>/dev/null; then
-    skip "jsonschema not found"
-  fi
   shiv_register "foo" "/path/to/foo"
-  jsonschema validate "$REPO_DIR/registry.schema.json" "$SHIV_REGISTRY"
+  validate_registry_schema
 }
 
 @test "schema: registry with ref is valid" {
-  if ! command -v jsonschema &>/dev/null; then
-    skip "jsonschema not found"
-  fi
   SHIV_REF="v1.0.0" shiv_register "foo" "/path/to/foo"
-  jsonschema validate "$REPO_DIR/registry.schema.json" "$SHIV_REGISTRY"
+  validate_registry_schema
 }
 
 @test "schema: registry with ref mode is valid" {
-  if ! command -v jsonschema &>/dev/null; then
-    skip "jsonschema not found"
-  fi
   SHIV_REF="v1.0.0" SHIV_REF_MODE="release" shiv_register "foo" "/path/to/foo"
-  jsonschema validate "$REPO_DIR/registry.schema.json" "$SHIV_REGISTRY"
+  validate_registry_schema
 }
 
 @test "schema: registry with ref and aliases is valid" {
-  if ! command -v jsonschema &>/dev/null; then
-    skip "jsonschema not found"
-  fi
   SHIV_REF="v1.0.0" shiv_register "foo" "/path/to/foo" "f"
-  jsonschema validate "$REPO_DIR/registry.schema.json" "$SHIV_REGISTRY"
+  validate_registry_schema
 }
