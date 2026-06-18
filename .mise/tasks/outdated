@@ -62,6 +62,11 @@ latest_local_tag() {
 ROWS=()
 HAS_OUTDATED=false
 
+# Disable errexit for per-package checks: a corrupted or inaccessible repo
+# should produce an error row instead of crashing the whole task.
+# Re-enabled after the loop.
+set +e
+
 for name in "${NAMES[@]}"; do
   repo=$(shiv_registry_path "$name")
 
@@ -145,6 +150,8 @@ for name in "${NAMES[@]}"; do
     fi
   fi
 done
+
+set -e
 
 echo ""
 printf '%s\n' "${ROWS[@]}" | gum table -s "$SEP" -c "PACKAGE,CURRENT,LATEST,STATUS" -p --border normal

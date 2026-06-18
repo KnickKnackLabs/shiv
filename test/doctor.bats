@@ -19,6 +19,18 @@ setup() {
 
   mkdir -p "$SHIV_BIN_DIR"
   shiv_init_registry
+
+  # Create a test source file so common test package names resolve
+  # This prevents the source-not-found check from triggering on test fixtures
+  mkdir -p "$SHIV_CONFIG_DIR/sources"
+  cat > "$SHIV_CONFIG_DIR/sources/test.json" << 'EOF'
+{
+  "alpha": "test/alpha",
+  "bravo": "test/bravo",
+  "charlie": "test/charlie"
+}
+EOF
+
   setup_shiv_on_path
 }
 
@@ -279,6 +291,43 @@ SCRIPT
   echo "$output" | grep "alpha" | grep -q "✓"
   echo "$output" | grep -q "ORPHANED SHIMS"
   echo "$output" | grep -q "ghost"
+}
+
+# ============================================================================
+# Source-not-found detection
+# ============================================================================
+
+@test "doctor: missing shim not in sources suggests uninstall" {
+  # 'ghost' is not in the test sources file — simulates a package removed from index
+  local missing_repo="$TEST_HOME/nonexistent-repo"
+  shiv_register "ghost" "$missing_repo"
+
+  run run_doctor
+  [ "$status" -ne 0 ]
+  echo "$output" | grep -q "Package not found in any source index"
+  echo "$output" | grep -q "run 'shiv uninstall ghost' to clean up"
+}
+
+@test "doctor: missing shim in sources does not suggest uninstall" {
+  # 'alpha' is in the test sources file — should not suggest uninstall
+  create_installed_package "alpha"
+  rm "$SHIV_BIN_DIR/alpha"
+
+  run run_doctor
+  [ "$status" -ne 0 ]
+  echo "$output" | grep -q "shim missing"
+  ! echo "$output" | grep -q "run 'shiv uninstall alpha'"
+}
+
+@test "doctor: issues in source-unknown package count includes source-not-found" {
+  # Register 'mystery' (not in test sources) with a missing repo
+  # This produces 3 issues: missing repo + missing shim + source not found
+  shiv_register "mystery" "$TEST_HOME/nonexistent"
+
+  run run_doctor
+  [ "$status" -ne 0 ]
+  echo "$output" | grep "mystery" | grep -q "✗"
+  echo "$output" | grep -q "Cannot reinstall: run 'shiv uninstall mystery' to clean up"
 }
 
 # ============================================================================

@@ -92,13 +92,22 @@ else
     done < <(shiv_registry_aliases "$name")
     for alias in "${aliases[@]}"; do
       if [ ! -L "$SHIV_BIN_DIR/$alias" ]; then
-        issues+="    ✗ alias symlink missing: $SHIV_BIN_DIR/$alias"$'\n'
+        issues+="    ✗ alias symlink missing at $SHIV_BIN_DIR/$alias"$'\n'
         issue_count=$((issue_count + 1))
       elif [ "$(readlink "$SHIV_BIN_DIR/$alias")" != "$name" ]; then
         issues+="    ✗ alias symlink $alias points to wrong target"$'\n'
         issue_count=$((issue_count + 1))
       fi
     done
+
+    # Check if package is still available in sources (for packages with issues)
+    if [ "$issue_count" -gt 0 ]; then
+      if ! shiv_lookup "$name" &>/dev/null; then
+        issues+="    ⚠ Package not found in any source index"$'\n'
+        issues+="    → Cannot reinstall: run 'shiv uninstall $name' to clean up"$'\n'
+        issue_count=$((issue_count + 1))
+      fi
+    fi
 
     if [ "$issue_count" -gt 0 ]; then
       rows+=("${name}${SEP}✗ (${issue_count})")
