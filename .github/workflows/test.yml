@@ -40,7 +40,16 @@ jobs:
       - name: Install tools
         run: |
           mise trust
-          mise install bats
+          mise install bats gum codebase readme
 
       - name: Run tests
         run: mise run test
+
+      - name: Check whitespace
+        run: git diff --check
+
+      - name: Run codebase lints
+        run: codebase lint "$PWD"
+
+      - name: Check README freshness
+        run: readme build --check
