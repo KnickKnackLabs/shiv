@@ -445,6 +445,35 @@ populate_task_map() {
   [[ "$output" == *"GREET_LOUD"* ]]
 }
 
+@test "shim: default global cache stays fixed at its generation-time XDG path" {
+  local repo_dir generation_xdg runtime_xdg task_map
+  repo_dir=$(create_resolve_repo "mytool")
+  generation_xdg="$TEST_HOME/generation-cache"
+  runtime_xdg="$TEST_HOME/runtime-cache"
+
+  unset SHIV_CACHE_DIR
+  export XDG_CACHE_HOME="$generation_xdg"
+  source "$REPO_DIR/lib/cache.sh"
+  [ "$SHIV_CACHE_DIR" = "$generation_xdg/shiv" ]
+
+  shiv_create_shim "mytool" "$repo_dir"
+  task_map="$generation_xdg/shiv/tasks/mytool"
+  mkdir -p "$(dirname "$task_map")" "$runtime_xdg/shiv/tasks"
+  printf '%s\n' "dev test unit" > "$task_map"
+  printf '%s\n' "stale task" > "$runtime_xdg/shiv/tasks/mytool"
+
+  run env -u SHIV_SKIP_CACHE XDG_CACHE_HOME="$runtime_xdg" "$SHIV_BIN_DIR/mytool" dev test unit
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"DEV_TEST_UNIT"* ]]
+
+  rm -f "$task_map"
+  run env -u SHIV_SKIP_CACHE XDG_CACHE_HOME="$runtime_xdg" "$SHIV_BIN_DIR/mytool" dev test unit
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"DEV_TEST_UNIT"* ]]
+  grep -q '^dev test unit$' "$task_map"
+  grep -q '^stale task$' "$runtime_xdg/shiv/tasks/mytool"
+}
+
 @test "shim: tasks groups colon-namespaced tasks" {
   local repo_dir
   repo_dir=$(create_resolve_repo "mytool")
