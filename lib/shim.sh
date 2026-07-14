@@ -30,8 +30,9 @@ shiv_caller_pwd_var_name() {
 shiv_create_shim() {
   local name="$1" repo_dir="$2"
   local default_task=""
-  local caller_pwd_var
+  local caller_pwd_var task_map_quoted
   caller_pwd_var=$(shiv_caller_pwd_var_name "$name")
+  task_map_quoted=$(shiv_shell_quote "$SHIV_CACHE_DIR/tasks/$name")
 
   # At install time, detect a default task for single-command tools.
   # Checks .mise/tasks/<name> first, then .mise/tasks/_default.
@@ -71,7 +72,7 @@ REPO="$repo_dir"
 DEFAULT_TASK="${default_task}"
 HAS_TASKS_TASK="${has_tasks_task}"
 HAS_HELP_TASK="${has_help_task}"
-SHIV_TASK_MAP="\${XDG_CACHE_HOME:-\$HOME/.cache}/shiv/tasks/$name"
+SHIV_TASK_MAP=$task_map_quoted
 
 _shiv_check_repo() {
   if [ ! -d "\$REPO" ]; then

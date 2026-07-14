@@ -403,6 +403,48 @@ populate_task_map() {
   [[ "$output" == *"DEV_TEST_UNIT"* ]]
 }
 
+@test "shim: install-local task map ignores conflicting runtime XDG cache" {
+  local repo_dir runtime_cache
+  repo_dir=$(create_resolve_repo "mytool")
+  shiv install mytool "$repo_dir" 2>/dev/null
+  populate_task_map "mytool" "$repo_dir"
+
+  runtime_cache="$TEST_HOME/runtime-cache"
+  mkdir -p "$runtime_cache/shiv/tasks"
+  printf '%s\n' "stale task" > "$runtime_cache/shiv/tasks/mytool"
+
+  run env XDG_CACHE_HOME="$runtime_cache" "$SHIV_BIN_DIR/mytool" dev test unit
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"DEV_TEST_UNIT"* ]]
+}
+
+@test "shim: same package shims keep separate install-local task maps" {
+  local repo_dir first_bin first_cache second_bin second_cache runtime_cache
+  repo_dir=$(create_resolve_repo "mytool")
+  first_bin="$TEST_HOME/versions/one/bin"
+  first_cache="$TEST_HOME/versions/one/cache"
+  second_bin="$TEST_HOME/versions/two/bin"
+  second_cache="$TEST_HOME/versions/two/cache"
+  runtime_cache="$TEST_HOME/runtime-cache"
+
+  SHIV_BIN_DIR="$first_bin" SHIV_CACHE_DIR="$first_cache" shiv_create_shim "mytool" "$repo_dir"
+  mkdir -p "$first_cache/tasks"
+  printf '%s\n' "dev test unit" > "$first_cache/tasks/mytool"
+
+  SHIV_BIN_DIR="$second_bin" SHIV_CACHE_DIR="$second_cache" shiv_create_shim "mytool" "$repo_dir"
+  mkdir -p "$second_cache/tasks" "$runtime_cache/shiv/tasks"
+  printf '%s\n' "greet loud" > "$second_cache/tasks/mytool"
+  printf '%s\n' "stale task" > "$runtime_cache/shiv/tasks/mytool"
+
+  run env XDG_CACHE_HOME="$runtime_cache" "$first_bin/mytool" dev test unit
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"DEV_TEST_UNIT"* ]]
+
+  run env XDG_CACHE_HOME="$runtime_cache" "$second_bin/mytool" greet loud
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"GREET_LOUD"* ]]
+}
+
 @test "shim: tasks groups colon-namespaced tasks" {
   local repo_dir
   repo_dir=$(create_resolve_repo "mytool")
@@ -462,19 +504,21 @@ populate_task_map() {
   [[ "$output" == "GREET_LOUD " ]] || [[ "$output" == "GREET_LOUD" ]]
 }
 
-@test "shim: cache miss generates task map on the fly" {
-  local repo_dir
+@test "shim: cache miss generates task map in install-local cache" {
+  local repo_dir runtime_cache
   repo_dir=$(create_resolve_repo "mytool")
   shiv install mytool "$repo_dir" 2>/dev/null
 
+  runtime_cache="$TEST_HOME/runtime-cache"
   [ ! -f "$SHIV_CACHE_DIR/tasks/mytool" ]
+  [ ! -f "$runtime_cache/shiv/tasks/mytool" ]
 
-  # The shim uses XDG_CACHE_HOME (not SHIV_CACHE_DIR) for task maps.
-  run env -u SHIV_SKIP_CACHE XDG_CACHE_HOME="$TEST_HOME/.cache" "$SHIV_BIN_DIR/mytool" dev test unit
+  run env -u SHIV_SKIP_CACHE XDG_CACHE_HOME="$runtime_cache" "$SHIV_BIN_DIR/mytool" dev test unit
   [ "$status" -eq 0 ]
   [[ "$output" == *"DEV_TEST_UNIT"* ]]
 
   [ -f "$SHIV_CACHE_DIR/tasks/mytool" ]
+  [ ! -f "$runtime_cache/shiv/tasks/mytool" ]
 }
 
 @test "shim: cache miss and execution ignore inherited mise config override" {
