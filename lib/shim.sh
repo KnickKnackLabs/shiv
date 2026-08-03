@@ -226,7 +226,13 @@ _shiv_handle_help() {
 }
 
 _shiv_handle_version() {
-  local version branch updated git_prefix
+  local version branch updated git_prefix git_var
+
+  # Git exports repository-selection variables to hooks. Clear them before
+  # inspecting the package so caller metadata cannot override git -C.
+  while IFS= read -r git_var; do
+    [ -n "\$git_var" ] && unset "\$git_var"
+  done < <(git rev-parse --local-env-vars 2>/dev/null)
 
   # git -C searches parent directories. Require the package itself to be the
   # worktree root so a non-Git local package cannot inherit unrelated metadata.

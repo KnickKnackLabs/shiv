@@ -193,6 +193,24 @@ TASK
   [ "$output" = "myapp unknown (branch: unknown, updated: unknown)" ]
 }
 
+@test "shim: --version ignores inherited Git repository environment" {
+  local parent_dir="$TEST_HOME/repos/parent" repo_dir short
+  repo_dir=$(create_caller_repo "myapp")
+  short=$(git -C "$repo_dir" rev-parse --short HEAD)
+  mkdir -p "$parent_dir"
+  git -C "$parent_dir" init -q -b unrelated
+  git -C "$parent_dir" config user.email "test@test.com"
+  git -C "$parent_dir" config user.name "Test"
+  touch "$parent_dir/tracked"
+  git -C "$parent_dir" add tracked
+  git -C "$parent_dir" commit -q -m "init"
+  shiv install myapp "$repo_dir" 2>/dev/null
+
+  run env GIT_DIR="$parent_dir/.git" "$SHIV_BIN_DIR/myapp" --version
+  [ "$status" -eq 0 ]
+  [[ "$output" == "myapp $short (branch: main, updated: "*" ago)" ]]
+}
+
 # ============================================================================
 # tasks interception
 # ============================================================================
