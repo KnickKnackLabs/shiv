@@ -225,6 +225,27 @@ _shiv_handle_help() {
   _shiv_handle_tasks tasks
 }
 
+_shiv_handle_version() {
+  local version branch updated
+
+  if ! version=\$(git -C "\$REPO" describe --tags --exact-match HEAD 2>/dev/null); then
+    version=\$(git -C "\$REPO" rev-parse --short HEAD 2>/dev/null || printf 'unknown')
+  fi
+
+  if [ "\$version" = "unknown" ]; then
+    branch="unknown"
+    updated="unknown"
+  else
+    if [ -n "\$(git -C "\$REPO" status --porcelain 2>/dev/null)" ]; then
+      version="\${version}*"
+    fi
+    branch=\$(git -C "\$REPO" symbolic-ref --quiet --short HEAD 2>/dev/null || printf 'detached')
+    updated=\$(git -C "\$REPO" log -1 --format='%cd' --date=relative 2>/dev/null || printf 'unknown')
+  fi
+
+  printf '%s %s (branch: %s, updated: %s)\n' "$name" "\$version" "\$branch" "\$updated"
+}
+
 SCRIPT
 
   {
@@ -248,6 +269,9 @@ _shiv_check_cwd "\$@"
 case "\${1:-}" in
   --help|-h|help)
     _shiv_handle_help "\${1:-help}"
+    ;;
+  --version)
+    _shiv_handle_version
     ;;
   tasks)
     _shiv_handle_tasks "\$@"
