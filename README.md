@@ -8,7 +8,7 @@
 
 ![shell: bash](https://img.shields.io/badge/shell-bash-4EAA25?style=flat&logo=gnubash&logoColor=white)
 [![runtime: mise](https://img.shields.io/badge/runtime-mise-7c3aed?style=flat)](https://mise.jdx.dev)
-![tests: 284 passing](https://img.shields.io/badge/tests-284%20passing-brightgreen?style=flat)
+![tests: 291 passing](https://img.shields.io/badge/tests-291%20passing-brightgreen?style=flat)
 ![packages: 49](https://img.shields.io/badge/packages-49-blue?style=flat)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat)](LICENSE)
 
@@ -24,6 +24,9 @@ shiv install shimmer
 
 # Use it — spaces work as namespace separators
 shimmer agent message k7r2 "hello"
+
+# Check the installed version
+shimmer --version
 
 # See what's installed
 shiv list
@@ -47,7 +50,7 @@ When you run `shiv install foo`, shiv:
 4. Generates a shim at `~/.local/bin/foo`
 5. Registers the package in `~/.config/shiv/registry.json`
 
-The shim is a bash script that forwards commands to `mise -C <repo> run`. It exports a package-specific caller variable (for example, `SHIMMER_CALLER_PWD`) so tools know where you invoked them, translates space-separated arguments to colon-joined task names (`agent message` → `agent:message`), and provides tab completions for all available tasks.
+The shim is a bash script that forwards commands to `mise -C <repo> run`. It exports a package-specific caller variable (for example, `SHIMMER_CALLER_PWD`) so tools know where you invoked them, translates space-separated arguments to colon-joined task names (`agent message` → `agent:message`), reports the package's exact tag or commit through `--version`, and provides tab completions for all available tasks.
 
 ## Install
 
@@ -148,7 +151,7 @@ cd shiv && mise trust && mise install
 mise run test
 ```
 
-Tests use [BATS](https://github.com/bats-core/bats-core) — the default run covers 284 tests across 14 suites. Completion tests run separately.
+Tests use [BATS](https://github.com/bats-core/bats-core) — the default run covers 291 tests across 14 suites. Completion tests run separately.
 
 <div align="center">
 

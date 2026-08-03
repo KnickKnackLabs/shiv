@@ -67,6 +67,9 @@ shiv install shimmer
 # Use it — spaces work as namespace separators
 shimmer agent message k7r2 "hello"
 
+# Check the installed version
+shimmer --version
+
 # See what's installed
 shiv list
 
@@ -100,6 +103,7 @@ shiv doctor`}</CodeBlock>
         a package-specific caller variable (for example, <Code>SHIMMER_CALLER_PWD</Code>) so tools know where you invoked them,
         translates space-separated arguments to colon-joined task names
         (<Code>agent message</Code> → <Code>agent:message</Code>),
+        reports the package's exact tag or commit through <Code>--version</Code>,
         and provides tab completions for all available tasks.
       </Paragraph>
     </Section>

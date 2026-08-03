@@ -225,6 +225,37 @@ _shiv_handle_help() {
   _shiv_handle_tasks tasks
 }
 
+_shiv_handle_version() {
+  local version branch updated git_prefix git_var
+
+  # Git exports repository-selection variables to hooks. Clear them before
+  # inspecting the package so caller metadata cannot override git -C.
+  while IFS= read -r git_var; do
+    [ -n "\$git_var" ] && unset "\$git_var"
+  done < <(git rev-parse --local-env-vars 2>/dev/null)
+
+  # git -C searches parent directories. Require the package itself to be the
+  # worktree root so a non-Git local package cannot inherit unrelated metadata.
+  if ! git_prefix=\$(git -C "\$REPO" rev-parse --show-prefix 2>/dev/null) || [ -n "\$git_prefix" ]; then
+    version="unknown"
+  elif ! version=\$(git -C "\$REPO" describe --tags --exact-match HEAD 2>/dev/null); then
+    version=\$(git -C "\$REPO" rev-parse --short HEAD 2>/dev/null || printf 'unknown')
+  fi
+
+  if [ "\$version" = "unknown" ]; then
+    branch="unknown"
+    updated="unknown"
+  else
+    if [ -n "\$(git -C "\$REPO" status --porcelain 2>/dev/null)" ]; then
+      version="\${version}*"
+    fi
+    branch=\$(git -C "\$REPO" symbolic-ref --quiet --short HEAD 2>/dev/null || printf 'detached')
+    updated=\$(git -C "\$REPO" log -1 --format='%cd' --date=relative 2>/dev/null || printf 'unknown')
+  fi
+
+  printf '%s %s (branch: %s, updated: %s)\n' "$name" "\$version" "\$branch" "\$updated"
+}
+
 SCRIPT
 
   {
@@ -248,6 +279,9 @@ _shiv_check_cwd "\$@"
 case "\${1:-}" in
   --help|-h|help)
     _shiv_handle_help "\${1:-help}"
+    ;;
+  --version)
+    _shiv_handle_version
     ;;
   tasks)
     _shiv_handle_tasks "\$@"
