@@ -176,6 +176,23 @@ TASK
   [ "$output" = "myapp unknown (branch: unknown, updated: unknown)" ]
 }
 
+@test "shim: --version does not inherit Git metadata from a parent checkout" {
+  local parent_dir="$TEST_HOME/repos/parent" repo_dir="$TEST_HOME/repos/parent/myapp"
+  mkdir -p "$parent_dir"
+  git -C "$parent_dir" init -q -b unrelated
+  git -C "$parent_dir" config user.email "test@test.com"
+  git -C "$parent_dir" config user.name "Test"
+  touch "$parent_dir/tracked"
+  git -C "$parent_dir" add tracked
+  git -C "$parent_dir" commit -q -m "init"
+  mkdir -p "$repo_dir"
+  shiv_create_shim "myapp" "$repo_dir"
+
+  run "$SHIV_BIN_DIR/myapp" --version
+  [ "$status" -eq 0 ]
+  [ "$output" = "myapp unknown (branch: unknown, updated: unknown)" ]
+}
+
 # ============================================================================
 # tasks interception
 # ============================================================================
