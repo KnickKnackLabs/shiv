@@ -226,9 +226,13 @@ _shiv_handle_help() {
 }
 
 _shiv_handle_version() {
-  local version branch updated
+  local version branch updated git_prefix
 
-  if ! version=\$(git -C "\$REPO" describe --tags --exact-match HEAD 2>/dev/null); then
+  # git -C searches parent directories. Require the package itself to be the
+  # worktree root so a non-Git local package cannot inherit unrelated metadata.
+  if ! git_prefix=\$(git -C "\$REPO" rev-parse --show-prefix 2>/dev/null) || [ -n "\$git_prefix" ]; then
+    version="unknown"
+  elif ! version=\$(git -C "\$REPO" describe --tags --exact-match HEAD 2>/dev/null); then
     version=\$(git -C "\$REPO" rev-parse --short HEAD 2>/dev/null || printf 'unknown')
   fi
 
