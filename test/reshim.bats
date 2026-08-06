@@ -127,6 +127,26 @@ run_reshim() {
   [ "$(cat "$SHIV_CACHE_DIR/tasks/dirty-tool")" = "old task map" ]
 }
 
+@test "reshim: cache discovery failure is reported and preserves old caches" {
+  create_package_repo broken-cache
+  register_package broken-cache branch main
+
+  mkdir -p "$SHIV_CACHE_DIR/completions" "$SHIV_CACHE_DIR/tasks"
+  printf 'old completions\n' > "$SHIV_CACHE_DIR/completions/broken-cache.cache"
+  printf 'old task map\n' > "$SHIV_CACHE_DIR/tasks/broken-cache"
+  printf '[invalid\n' > "$SHIV_PACKAGES_DIR/broken-cache/mise.toml"
+  git -C "$SHIV_PACKAGES_DIR/broken-cache" add mise.toml
+  git -C "$SHIV_PACKAGES_DIR/broken-cache" commit -q -m "add invalid mise config"
+  unset SHIV_SKIP_CACHE
+
+  run run_reshim
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"broken-cache — failed to refresh generated artifacts"* ]]
+  [ "$(cat "$SHIV_CACHE_DIR/completions/broken-cache.cache")" = "old completions" ]
+  [ "$(cat "$SHIV_CACHE_DIR/tasks/broken-cache")" = "old task map" ]
+}
+
 @test "reshim: missing and invalid repos fail while clean registered packages continue" {
   create_package_repo clean-tool
   register_package clean-tool branch main
@@ -167,4 +187,14 @@ TASK
   [ "$status" -eq 0 ]
   grep -q $'^hello\tSay hello$' "$SHIV_CACHE_DIR/completions/cached-tool.cache"
   grep -q '^hello$' "$SHIV_CACHE_DIR/tasks/cached-tool"
+
+  rm "$SHIV_PACKAGES_DIR/cached-tool/.mise/tasks/hello"
+  git -C "$SHIV_PACKAGES_DIR/cached-tool" add -u
+  git -C "$SHIV_PACKAGES_DIR/cached-tool" commit -q -m "remove task"
+
+  run run_reshim
+
+  [ "$status" -eq 0 ]
+  [ ! -e "$SHIV_CACHE_DIR/completions/cached-tool.cache" ]
+  [ ! -e "$SHIV_CACHE_DIR/tasks/cached-tool" ]
 }

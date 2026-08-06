@@ -54,7 +54,7 @@ reshim_one() {
     return 1
   fi
 
-  if ! shiv_refresh_package "$name" "$repo"; then
+  if ! shiv_refresh_package "$name" "$repo" true; then
     add_result "$name" "✗" "failed to refresh generated artifacts"
     echo "  ✗ $name — failed to refresh generated artifacts"
     return 1
