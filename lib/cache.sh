@@ -16,35 +16,41 @@ shiv_package_tasks_json() {
   )
 }
 
-# Cache task list for a tool (name<TAB>description per line)
-# Writes atomically — only replaces cache if new content is non-empty,
-# so a failed mise invocation doesn't leave an empty cache file.
+# Cache task list for a tool (name<TAB>description per line).
+# Writes atomically and preserves the old cache if task discovery fails.
+# Pass "true" as the third argument when discovery failure must be reported.
 shiv_cache_tasks() {
   [ "${SHIV_SKIP_CACHE:-}" = "1" ] && return 0
 
-  local name="$1" repo_dir="$2"
+  local name="$1" repo_dir="$2" require_refresh="${3:-false}"
   local cache="$SHIV_CACHE_DIR/completions/$name.cache"
   local tmp="$cache.tmp"
   mkdir -p "$SHIV_CACHE_DIR/completions"
   local tasks_json
   if ! tasks_json=$(shiv_package_tasks_json "$repo_dir"); then
     rm -f "$tmp"
+    if [ "$require_refresh" = "true" ]; then
+      return 1
+    fi
     return 0
   fi
   if [ -z "$tasks_json" ]; then
-    rm -f "$tmp"
+    rm -f "$tmp" "$cache"
     return 0
   fi
   if ! printf '%s\n' "$tasks_json" \
     | jq -r '.[] | select(.global != true) | select(.hide == false) | "\(.name)\t\(.description)"' \
     > "$tmp"; then
     rm -f "$tmp"
+    if [ "$require_refresh" = "true" ]; then
+      return 1
+    fi
     return 0
   fi
   if [ -s "$tmp" ]; then
     mv "$tmp" "$cache"
   else
-    rm -f "$tmp"
+    rm -f "$tmp" "$cache"
   fi
 }
 
@@ -60,30 +66,36 @@ shiv_cache_tasks() {
 shiv_cache_task_map() {
   [ "${SHIV_SKIP_CACHE:-}" = "1" ] && return 0
 
-  local name="$1" repo_dir="$2"
+  local name="$1" repo_dir="$2" require_refresh="${3:-false}"
   local cache="$SHIV_CACHE_DIR/tasks/$name"
   local tmp="$cache.tmp"
   mkdir -p "$SHIV_CACHE_DIR/tasks"
   local tasks_json
   if ! tasks_json=$(shiv_package_tasks_json "$repo_dir" --hidden); then
     rm -f "$tmp"
+    if [ "$require_refresh" = "true" ]; then
+      return 1
+    fi
     return 0
   fi
   if [ -z "$tasks_json" ]; then
-    rm -f "$tmp"
+    rm -f "$tmp" "$cache"
     return 0
   fi
   if ! printf '%s\n' "$tasks_json" \
     | jq -r '.[] | select(.global != true) | .name | gsub(":"; " ")' \
     > "$tmp"; then
     rm -f "$tmp"
+    if [ "$require_refresh" = "true" ]; then
+      return 1
+    fi
     return 0
   fi
 
   if [ -s "$tmp" ]; then
     mv "$tmp" "$cache"
   else
-    rm -f "$tmp"
+    rm -f "$tmp" "$cache"
   fi
 }
 
