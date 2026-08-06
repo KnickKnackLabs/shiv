@@ -4,6 +4,13 @@ set -euo pipefail
 
 source "$MISE_CONFIG_ROOT/lib/shim.sh"
 
+# Git exports repository-selection variables to hooks. Clear them before
+# inspecting registered packages so caller metadata cannot override git -C.
+git_local_env_vars=$(git rev-parse --local-env-vars 2>/dev/null)
+while IFS= read -r git_var; do
+  [ -n "$git_var" ] && unset "$git_var"
+done <<< "$git_local_env_vars"
+
 shiv_init_registry
 
 COUNT=$(jq 'length' "$SHIV_REGISTRY")
