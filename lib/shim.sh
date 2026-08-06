@@ -364,13 +364,13 @@ shiv_create_alias_symlinks() {
 
 # Refresh every generated artifact for a registered package.
 shiv_refresh_package() {
-  local name="$1" repo_dir="$2"
+  local name="$1" repo_dir="$2" require_cache_refresh="${3:-false}"
   local aliases=()
   local alias_output
 
   shiv_create_shim "$name" "$repo_dir" || return 1
-  shiv_cache_tasks "$name" "$repo_dir" || return 1
-  shiv_cache_task_map "$name" "$repo_dir" || return 1
+  shiv_cache_tasks "$name" "$repo_dir" "$require_cache_refresh" || return 1
+  shiv_cache_task_map "$name" "$repo_dir" "$require_cache_refresh" || return 1
 
   alias_output=$(shiv_registry_aliases "$name") || return 1
   while IFS= read -r alias; do
