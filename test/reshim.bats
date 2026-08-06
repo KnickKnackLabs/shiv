@@ -100,6 +100,17 @@ run_reshim() {
   create_package_repo dirty-tool
   register_package dirty-tool local main dirty-alias
 
+  mkdir -p "$SHIV_PACKAGES_DIR/dirty-tool/.mise/tasks"
+  cat > "$SHIV_PACKAGES_DIR/dirty-tool/.mise/tasks/current" <<'TASK'
+#!/usr/bin/env bash
+#MISE description="Current task"
+echo current
+TASK
+  chmod +x "$SHIV_PACKAGES_DIR/dirty-tool/.mise/tasks/current"
+  git -C "$SHIV_PACKAGES_DIR/dirty-tool" add .mise/tasks/current
+  git -C "$SHIV_PACKAGES_DIR/dirty-tool" commit -q -m "add task"
+  unset SHIV_SKIP_CACHE
+
   printf 'old shim\n' > "$SHIV_BIN_DIR/dirty-tool"
   ln -s old-target "$SHIV_BIN_DIR/dirty-alias"
   mkdir -p "$SHIV_CACHE_DIR/completions" "$SHIV_CACHE_DIR/tasks"
