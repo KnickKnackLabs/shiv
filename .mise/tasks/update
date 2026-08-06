@@ -36,23 +36,6 @@ package_version() {
   fi
 }
 
-refresh_package() {
-  local name="$1" repo="$2"
-  local aliases=()
-
-  shiv_create_shim "$name" "$repo"
-  shiv_cache_tasks "$name" "$repo"
-  shiv_cache_task_map "$name" "$repo"
-
-  while IFS= read -r _alias; do
-    [ -n "$_alias" ] && aliases+=("$_alias")
-  done < <(shiv_registry_aliases "$name")
-
-  if [ ${#aliases[@]} -gt 0 ]; then
-    shiv_create_alias_symlinks "$name" "${aliases[@]}"
-  fi
-}
-
 update_branch_like() {
   local name="$1" repo="$2" mode="$3" ref="$4"
   local branch before after output version reason count tag
@@ -84,7 +67,7 @@ update_branch_like() {
   if output=$(git -C "$repo" pull --ff-only 2>&1); then
     after=$(git -C "$repo" rev-parse --short HEAD 2>/dev/null || echo "unknown")
     version=$(package_version "$repo" "$after")
-    refresh_package "$name" "$repo"
+    shiv_refresh_package "$name" "$repo"
 
     if [ "$before" = "$after" ]; then
       add_result "$name" "$branch" "$version" "✓" "already up to date"
@@ -143,7 +126,7 @@ update_release() {
 
   current_tag=$(git -C "$repo" describe --tags --exact-match HEAD 2>/dev/null || echo "")
   if [ "$ref" = "$latest" ] && [ "$current_tag" = "$latest" ]; then
-    refresh_package "$name" "$repo"
+    shiv_refresh_package "$name" "$repo"
     add_result "$name" "$branch" "$version" "✓" "already on latest release"
     echo "  ✓ $name — already on latest release ($latest)"
     return 0
@@ -167,7 +150,7 @@ update_release() {
   branch=$(git -C "$repo" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "-")
   version=$(package_version "$repo" "$after")
   shiv_registry_set_ref "$name" "$latest" "release"
-  refresh_package "$name" "$repo"
+  shiv_refresh_package "$name" "$repo"
 
   if [ "$before" = "$after" ]; then
     add_result "$name" "$branch" "$version" "✓" "release intent recorded as $latest"

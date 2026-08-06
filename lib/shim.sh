@@ -358,8 +358,28 @@ shiv_create_alias_symlinks() {
   shift
   local aliases=("$@")
   for alias in "${aliases[@]}"; do
-    ln -sf "$name" "$SHIV_BIN_DIR/$alias"
+    ln -sf "$name" "$SHIV_BIN_DIR/$alias" || return 1
   done
+}
+
+# Refresh every generated artifact for a registered package.
+shiv_refresh_package() {
+  local name="$1" repo_dir="$2"
+  local aliases=()
+  local alias_output
+
+  shiv_create_shim "$name" "$repo_dir" || return 1
+  shiv_cache_tasks "$name" "$repo_dir" || return 1
+  shiv_cache_task_map "$name" "$repo_dir" || return 1
+
+  alias_output=$(shiv_registry_aliases "$name") || return 1
+  while IFS= read -r alias; do
+    [ -n "$alias" ] && aliases+=("$alias")
+  done <<< "$alias_output"
+
+  if [ "${#aliases[@]}" -gt 0 ]; then
+    shiv_create_alias_symlinks "$name" "${aliases[@]}" || return 1
+  fi
 }
 
 # Quote a value for POSIX-ish shell eval output.
