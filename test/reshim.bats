@@ -138,6 +138,31 @@ TASK
   [ "$(cat "$SHIV_CACHE_DIR/tasks/dirty-tool")" = "old task map" ]
 }
 
+@test "reshim: caller Git environment cannot bypass the dirty-worktree guard" {
+  create_package_repo dirty-tool
+  register_package dirty-tool local main
+  printf 'old shim\n' > "$SHIV_BIN_DIR/dirty-tool"
+  printf 'dirty\n' >> "$SHIV_PACKAGES_DIR/dirty-tool/README.md"
+
+  local caller_repo="$BATS_TEST_TMPDIR/caller-repo"
+  mkdir -p "$caller_repo"
+  git -C "$caller_repo" init -q -b main
+  git -C "$caller_repo" config user.email "test@test.com"
+  git -C "$caller_repo" config user.name "Test"
+  printf 'clean\n' > "$caller_repo/README.md"
+  git -C "$caller_repo" add README.md
+  git -C "$caller_repo" commit -q -m "init"
+
+  export GIT_DIR="$caller_repo/.git"
+  export GIT_WORK_TREE="$caller_repo"
+  run run_reshim
+  unset GIT_DIR GIT_WORK_TREE
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"dirty-tool — dirty worktree — skipped"* ]]
+  [ "$(cat "$SHIV_BIN_DIR/dirty-tool")" = "old shim" ]
+}
+
 @test "reshim: cache discovery failure is reported and preserves old caches" {
   create_package_repo broken-cache
   register_package broken-cache branch main
