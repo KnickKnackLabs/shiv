@@ -14,6 +14,13 @@ fi
 
 SEP='|'
 RESULTS=()
+ENTRIES_FILE=$(mktemp)
+trap 'rm -f "$ENTRIES_FILE"' EXIT
+
+if ! shiv_registry_entries > "$ENTRIES_FILE"; then
+  echo "Error: could not read registered packages from $SHIV_REGISTRY" >&2
+  exit 1
+fi
 
 add_result() {
   RESULTS+=("$1${SEP}$2${SEP}$3")
@@ -63,7 +70,7 @@ echo ""
 rc=0
 while IFS=$'\t' read -r name repo _ref; do
   reshim_one "$name" "$repo" || rc=1
-done < <(shiv_registry_entries)
+done < "$ENTRIES_FILE"
 
 echo ""
 printf '%s\n' "${RESULTS[@]}" \

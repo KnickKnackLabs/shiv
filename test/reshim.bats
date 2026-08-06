@@ -53,6 +53,16 @@ run_reshim() {
   [[ "$output" == *"No tools registered."* ]]
 }
 
+@test "reshim: invalid registry entries fail instead of disappearing" {
+  printf '%s\n' '{"broken":"not-an-object"}' > "$SHIV_REGISTRY"
+
+  run run_reshim
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"could not read registered packages"* ]]
+  [ ! -e "$SHIV_BIN_DIR/broken" ]
+}
+
 @test "reshim: refreshes exact, local, self, and alias artifacts without scanning package storage" {
   create_package_repo shiv
   git -C "$SHIV_PACKAGES_DIR/shiv" -c tag.gpgSign=false tag v1.0.0
