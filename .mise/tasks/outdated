@@ -27,36 +27,19 @@ if [ ${#NAMES[@]} -eq 0 ]; then
   exit 0
 fi
 
-# Sort semver tags correctly, handling optional v-prefix.
-# Strips 'v', sorts numerically by major.minor.patch, returns original tag name.
-# Works on both GNU and BSD sort (no sort -V dependency).
-semver_sort() {
-  local tags
-  tags=$(cat)
-  if [ -z "$tags" ]; then return; fi
-  local latest_ver
-  latest_ver=$(echo "$tags" | sed 's/^v//' | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)
-  echo "$tags" | grep -F "$latest_ver" | tail -1
-}
-
-# Get the latest semver tag from remote tags output (git ls-remote --tags)
-# Expects lines like: <sha>\trefs/tags/v1.2.3
-# Filters out ^{} derefs, strips refs/tags/, sorts by semver, picks last
 latest_remote_tag() {
   local tags_output="$1"
-  echo "$tags_output" \
-    | grep -v '\^{}' \
-    | sed 's|.*refs/tags/||' \
-    | grep -E '^v?[0-9]+\.[0-9]+' \
-    | semver_sort
+  printf '%s\n' "$tags_output" \
+    | sed '/\^{}$/d; s|.*refs/tags/||' \
+    | shiv_latest_semver_tag
 }
 
-# Get the latest tag from a local repo (semver sort)
 latest_local_tag() {
-  local repo="$1"
-  git -C "$repo" tag -l 2>/dev/null \
-    | grep -E '^v?[0-9]+\.[0-9]+' \
-    | semver_sort
+  local repo="$1" tags
+  if ! tags=$(git -C "$repo" tag -l 2>/dev/null); then
+    return 1
+  fi
+  printf '%s\n' "$tags" | shiv_latest_semver_tag
 }
 
 ROWS=()
@@ -90,8 +73,13 @@ for name in "${NAMES[@]}"; do
   fi
 
   # Current version: tag if on one, otherwise short hash
-  current_tag=$(git -C "$repo" describe --tags --exact-match HEAD 2>/dev/null || echo "")
-  current_hash=$(git -C "$repo" rev-parse --short HEAD 2>/dev/null || echo "?")
+  if ! current_tag=$(git -C "$repo" describe --tags --exact-match HEAD 2>/dev/null); then
+    current_tag=""
+  fi
+  if ! current_hash=$(git -C "$repo" rev-parse --short HEAD 2>/dev/null); then
+    ROWS+=("${name}${SEP}-${SEP}-${SEP}✗ could not inspect HEAD")
+    continue
+  fi
   current="${current_tag:-$current_hash}"
 
   # Get remote URL
@@ -101,18 +89,25 @@ for name in "${NAMES[@]}"; do
     continue
   fi
 
-  # Fetch remote tags
-  tags_output=$(git ls-remote --tags "$remote_url" 2>/dev/null || echo "")
+  if ! tags_output=$(git ls-remote --tags "$remote_url" 2>/dev/null); then
+    ROWS+=("${name}${SEP}${current}${SEP}-${SEP}· can't reach remote")
+    continue
+  fi
 
   if [ -z "$tags_output" ]; then
-    # No remote tags — compare HEAD against remote HEAD
-    remote_head=$(git ls-remote "$remote_url" HEAD 2>/dev/null | awk '{print $1}' | head -c7)
-    if [ -z "$remote_head" ]; then
+    if ! remote_head=$(git ls-remote "$remote_url" HEAD 2>/dev/null | awk '{print substr($1, 1, 7)}'); then
       ROWS+=("${name}${SEP}${current}${SEP}-${SEP}· can't reach remote")
       continue
     fi
+    if [ -z "$remote_head" ]; then
+      ROWS+=("${name}${SEP}${current}${SEP}-${SEP}· remote HEAD missing")
+      continue
+    fi
 
-    local_head=$(git -C "$repo" rev-parse HEAD 2>/dev/null || echo "")
+    if ! local_head=$(git -C "$repo" rev-parse HEAD 2>/dev/null); then
+      ROWS+=("${name}${SEP}${current}${SEP}-${SEP}✗ could not inspect HEAD")
+      continue
+    fi
     if [ "${local_head:0:7}" = "$remote_head" ]; then
       ROWS+=("${name}${SEP}${current}${SEP}${current}${SEP}✓ up to date")
     else
@@ -135,8 +130,11 @@ for name in "${NAMES[@]}"; do
     HAS_OUTDATED=true
     ROWS+=("${name}${SEP}${current}${SEP}${latest}${SEP}⚠ outdated")
   else
-    # On a branch, not a tag — check if latest tag is ahead
-    local_latest=$(latest_local_tag "$repo")
+    # On a branch, not a tag — check if latest tag is present locally
+    if ! local_latest=$(latest_local_tag "$repo"); then
+      ROWS+=("${name}${SEP}${current}${SEP}${latest}${SEP}✗ could not inspect local tags")
+      continue
+    fi
     if [ "$local_latest" = "$latest" ]; then
       ROWS+=("${name}${SEP}${current}${SEP}${latest}${SEP}✓ latest tag present")
     else

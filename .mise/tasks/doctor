@@ -10,6 +10,50 @@ shiv_init_registry
 SEP='|'
 HAS_ISSUES=false
 
+reinstall_spec() {
+  local name="$1" ref mode
+  ref=$(shiv_registry_ref "$name")
+  mode=$(shiv_registry_ref_mode "$name")
+
+  case "$mode" in
+    branch | tag | commit)
+      if [ -n "$ref" ]; then
+        printf '%s@%s\n' "$name" "$ref"
+      else
+        printf '%s\n' "$name"
+      fi
+      ;;
+    *)
+      printf '%s\n' "$name"
+      ;;
+  esac
+}
+
+recovery_guidance() {
+  local name="$1" repo="$2" repo_usable="$3" generated_issue="$4" shim_conflict="$5"
+  local mode spec
+
+  if [ "$repo_usable" = "true" ]; then
+    if [ "$shim_conflict" = "true" ]; then
+      echo "    → Inspect or move the conflicting shim, then run 'shiv reshim'"
+    elif [ "$generated_issue" = "true" ]; then
+      echo "    → Repair generated artifacts with: shiv reshim"
+    fi
+    return 0
+  fi
+
+  mode=$(shiv_registry_ref_mode "$name")
+  if [ "$mode" = "local" ]; then
+    echo "    → Restore the local repository at $repo, or run 'shiv uninstall $name'"
+  elif shiv_lookup "$name" >/dev/null 2>&1; then
+    spec=$(reinstall_spec "$name")
+    echo "    → Reinstall the missing repository with: shiv install $spec"
+  else
+    echo "    ⚠ Package not found in any source index"
+    echo "    → Remove the stale registration with: shiv uninstall $name"
+  fi
+}
+
 # ── Header ──────────────────────────────────────────────────────
 
 COUNT=$(jq 'length' "$SHIV_REGISTRY")
@@ -57,23 +101,30 @@ else
   while IFS=$'\t' read -r name repo _ref; do
     issues=""
     issue_count=0
+    repo_usable=true
+    generated_issue=false
+    shim_conflict=false
 
-    # Check repo exists
     if [ ! -d "$repo" ]; then
       issues+="    ✗ repo not found at $repo"$'\n'
       issue_count=$((issue_count + 1))
+      repo_usable=false
+    elif ! git -C "$repo" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+      issues+="    ✗ repo is not a Git worktree at $repo"$'\n'
+      issue_count=$((issue_count + 1))
+      repo_usable=false
     fi
 
-    # Check shim exists and is managed by shiv
     if [ ! -f "$SHIV_BIN_DIR/$name" ]; then
       issues+="    ✗ shim missing at $SHIV_BIN_DIR/$name"$'\n'
       issue_count=$((issue_count + 1))
+      generated_issue=true
     elif ! grep -q "# managed by shiv" "$SHIV_BIN_DIR/$name" 2>/dev/null; then
       issues+="    ✗ shim exists but not managed by shiv"$'\n'
       issue_count=$((issue_count + 1))
+      shim_conflict=true
     fi
 
-    # Check shim points to right repo
     if [ -f "$SHIV_BIN_DIR/$name" ]; then
       shim_repo=""
       if ! shim_repo=$(grep '^REPO=' "$SHIV_BIN_DIR/$name" 2>/dev/null | cut -d'"' -f2); then
@@ -82,23 +133,33 @@ else
       if [ -n "$shim_repo" ] && [ "$shim_repo" != "$repo" ]; then
         issues+="    ✗ shim points to $shim_repo but registry says $repo"$'\n'
         issue_count=$((issue_count + 1))
+        generated_issue=true
       fi
     fi
 
-    # Check alias symlinks
     aliases=()
     while IFS= read -r _alias; do
       [ -n "$_alias" ] && aliases+=("$_alias")
     done < <(shiv_registry_aliases "$name")
     for alias in "${aliases[@]}"; do
       if [ ! -L "$SHIV_BIN_DIR/$alias" ]; then
-        issues+="    ✗ alias symlink missing: $SHIV_BIN_DIR/$alias"$'\n'
+        issues+="    ✗ alias symlink missing at $SHIV_BIN_DIR/$alias"$'\n'
         issue_count=$((issue_count + 1))
+        generated_issue=true
       elif [ "$(readlink "$SHIV_BIN_DIR/$alias")" != "$name" ]; then
         issues+="    ✗ alias symlink $alias points to wrong target"$'\n'
         issue_count=$((issue_count + 1))
+        generated_issue=true
       fi
     done
+
+    if [ "$issue_count" -gt 0 ]; then
+      guidance=$(recovery_guidance \
+        "$name" "$repo" "$repo_usable" "$generated_issue" "$shim_conflict")
+      if [ -n "$guidance" ]; then
+        issues+="$guidance"$'\n'
+      fi
+    fi
 
     if [ "$issue_count" -gt 0 ]; then
       rows+=("${name}${SEP}✗ (${issue_count})")

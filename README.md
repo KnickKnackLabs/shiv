@@ -8,7 +8,7 @@
 
 ![shell: bash](https://img.shields.io/badge/shell-bash-4EAA25?style=flat&logo=gnubash&logoColor=white)
 [![runtime: mise](https://img.shields.io/badge/runtime-mise-7c3aed?style=flat)](https://mise.jdx.dev)
-![tests: 291 passing](https://img.shields.io/badge/tests-291%20passing-brightgreen?style=flat)
+![tests: 303 passing](https://img.shields.io/badge/tests-303%20passing-brightgreen?style=flat)
 ![packages: 49](https://img.shields.io/badge/packages-49-blue?style=flat)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat)](LICENSE)
 
@@ -31,9 +31,8 @@ shimmer --version
 # See what's installed
 shiv list
 
-# Update package refs, then regenerate every clean registered shim
+# Update everything
 shiv update
-shiv reshim
 
 # Check health
 shiv doctor
@@ -109,8 +108,6 @@ shiv install notes@abc1234 # pin an exact commit
 
 `shiv update` preserves that intent: release-channel installs advance to the newest release tag, branch installs pull their branch, and exact tag/commit pins stay fixed until you reinstall at another ref. Legacy installs without recorded intent are refused with guidance to choose `@latest` or `@main` explicitly.
 
-`shiv reshim` regenerates shims and caches for every clean registered package without moving its Git ref. Dirty, missing, or invalid registered worktrees are reported and make the command fail after safe packages finish; unregistered package directories are never scanned. After upgrading Shiv itself, run `shiv update shiv` followed by `shiv reshim` so every active package uses the new generator.
-
 You can also install directly from a local path:
 
 ```bash
@@ -154,7 +151,7 @@ cd shiv && mise trust && mise install
 mise run test
 ```
 
-Tests use [BATS](https://github.com/bats-core/bats-core) — the default run covers 291 tests across 14 suites. Completion tests run separately.
+Tests use [BATS](https://github.com/bats-core/bats-core) — the default run covers 303 tests across 15 suites. Completion tests run separately.
 
 <div align="center">
 
