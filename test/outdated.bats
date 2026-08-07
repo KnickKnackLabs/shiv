@@ -169,6 +169,20 @@ create_local_package() {
   echo "$output" | grep -q "✓ latest tag present"
 }
 
+@test "outdated: branch with no local semver tags reports update and continues" {
+  local alpha_remote bravo_remote
+  alpha_remote=$(create_remote "alpha" "v1.0.0")
+  bravo_remote=$(create_remote "bravo" "v1.0.0")
+  create_package_from_remote "alpha" "$alpha_remote"
+  create_package_from_remote "bravo" "$bravo_remote" "v1.0.0"
+  git -C "$SHIV_PACKAGES_DIR/alpha" tag -d "v1.0.0"
+
+  run shiv outdated
+  [ "$status" -eq 1 ]
+  echo "$output" | grep "alpha" | grep -q "⚠ newer tag available"
+  echo "$output" | grep "bravo" | grep -q "✓ up to date"
+}
+
 # ============================================================================
 # No remote
 # ============================================================================
@@ -180,6 +194,20 @@ create_local_package() {
   [ "$status" -eq 0 ]
   echo "$output" | grep -q "alpha"
   echo "$output" | grep -q "· no remote"
+}
+
+@test "outdated: unreachable remote reports package and continues" {
+  local alpha_remote bravo_remote
+  alpha_remote=$(create_remote "alpha" "v1.0.0")
+  bravo_remote=$(create_remote "bravo" "v1.0.0")
+  create_package_from_remote "alpha" "$alpha_remote" "v1.0.0"
+  create_package_from_remote "bravo" "$bravo_remote" "v1.0.0"
+  git -C "$SHIV_PACKAGES_DIR/alpha" remote set-url origin "$TEST_HOME/missing.git"
+
+  run shiv outdated
+  [ "$status" -eq 0 ]
+  echo "$output" | grep "alpha" | grep -q "can't reach remote"
+  echo "$output" | grep "bravo" | grep -q "✓ up to date"
 }
 
 # ============================================================================
