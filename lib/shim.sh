@@ -30,8 +30,9 @@ shiv_caller_pwd_var_name() {
 shiv_create_shim() {
   local name="$1" repo_dir="$2"
   local default_task=""
-  local caller_pwd_var
+  local caller_pwd_var task_map_quoted
   caller_pwd_var=$(shiv_caller_pwd_var_name "$name")
+  task_map_quoted=$(shiv_shell_quote "$SHIV_CACHE_DIR/tasks/$name")
 
   # At install time, detect a default task for single-command tools.
   # Checks .mise/tasks/<name> first, then .mise/tasks/_default.
@@ -71,7 +72,7 @@ REPO="$repo_dir"
 DEFAULT_TASK="${default_task}"
 HAS_TASKS_TASK="${has_tasks_task}"
 HAS_HELP_TASK="${has_help_task}"
-SHIV_TASK_MAP="\${XDG_CACHE_HOME:-\$HOME/.cache}/shiv/tasks/$name"
+SHIV_TASK_MAP=$task_map_quoted
 
 _shiv_check_repo() {
   if [ ! -d "\$REPO" ]; then
@@ -91,8 +92,20 @@ _shiv_check_cwd() {
   fi
 }
 
-# NOTE: the mise tasks | jq pipeline below duplicates shiv_cache_task_map()
-# in lib/cache.sh (shim self-containment). If you change the format, update both.
+_shiv_package_tasks_json() {
+  unset MISE_OVERRIDE_CONFIG_FILENAMES
+  mise tasks --json "\$@" -C "\$REPO" 2>/dev/null
+}
+
+_shiv_exec_package_mise() {
+  unset MISE_OVERRIDE_CONFIG_FILENAMES
+  exec mise -C "\$REPO" "\$@"
+}
+
+# NOTE: the task-map transformation duplicates shiv_cache_task_map() in
+# lib/cache.sh (shim self-containment). If you change package-task cache
+# invariants, update both places: scrub caller-scoped mise config overrides and
+# exclude global mise tasks.
 _shiv_ensure_task_map() {
   [ -f "\$SHIV_TASK_MAP" ] && return 0
   if ! command -v jq >/dev/null 2>&1; then
@@ -101,8 +114,17 @@ _shiv_ensure_task_map() {
   fi
   mkdir -p "\$(dirname "\$SHIV_TASK_MAP")"
   local tmp="\$SHIV_TASK_MAP.tmp"
-  if ! mise tasks --json --hidden -C "\$REPO" 2>/dev/null \\
-    | jq -r '.[].name | gsub(":"; " ")' > "\$tmp" 2>/dev/null; then
+  local tasks_json
+  if ! tasks_json=\$(_shiv_package_tasks_json --hidden); then
+    rm -f "\$tmp"
+    return 0
+  fi
+  if [ -z "\$tasks_json" ]; then
+    rm -f "\$tmp"
+    return 0
+  fi
+  if ! printf '%s\n' "\$tasks_json" \\
+    | jq -r '.[] | select(.global != true) | .name | gsub(":"; " ")' > "\$tmp" 2>/dev/null; then
     rm -f "\$tmp"
     return 0
   fi
@@ -124,10 +146,15 @@ _shiv_render_tasks() {
     return 1
   fi
 
-  local tmp repo_prefix
+  local tmp repo_prefix tasks_json
   tmp=\$(mktemp)
   repo_prefix="\$(cd "\$REPO" && pwd -P)/"
-  if ! mise -C "\$REPO" tasks --local --json 2>/dev/null \
+  if ! tasks_json=\$(_shiv_package_tasks_json --local); then
+    rm -f "\$tmp"
+    echo "$name: failed to render package-local task list" >&2
+    return 1
+  fi
+  if ! printf '%s\n' "\$tasks_json" \
     | jq -r --arg repo_prefix "\$repo_prefix" '[.[] | select(.hide != true) | select(((.source // .file // "") | startswith(\$repo_prefix))) | (.name | split(":")) as \$p | {
         group: (if (\$p | length) > 1 then \$p[0] else "root" end),
         task: (if (\$p | length) > 1 then (\$p[1:] | join(":")) else .name end),
@@ -166,7 +193,7 @@ _shiv_render_tasks() {
 
 _shiv_handle_tasks() {
   if [ "\$HAS_TASKS_TASK" = "true" ]; then
-    exec mise -C "\$REPO" run -q "\$@"
+    _shiv_exec_package_mise run -q "\$@"
   fi
   _shiv_render_tasks
   local rc=\$?
@@ -181,7 +208,7 @@ _shiv_handle_help() {
   # Package-owned help wins. This lets tools expose richer help than the
   # generic mise task list while keeping the shim-level interception.
   if [ "\$HAS_HELP_TASK" = "true" ]; then
-    exec mise -C "\$REPO" run -q help
+    _shiv_exec_package_mise run -q help
   fi
 
   # Single-command tools (.mise/tasks/<name>) should show the command help,
@@ -189,13 +216,44 @@ _shiv_handle_help() {
   # menus/catch-alls where task-list help is still the safer default.
   if [ -n "\$DEFAULT_TASK" ] && [ "\$DEFAULT_TASK" != "_default" ]; then
     if [ "\$help_arg" = "help" ]; then
-      exec mise -C "\$REPO" run -q "\$DEFAULT_TASK" help
+      _shiv_exec_package_mise run -q "\$DEFAULT_TASK" help
     else
-      exec mise -C "\$REPO" run -q "\$DEFAULT_TASK" "\$help_arg"
+      _shiv_exec_package_mise run -q "\$DEFAULT_TASK" "\$help_arg"
     fi
   fi
 
   _shiv_handle_tasks tasks
+}
+
+_shiv_handle_version() {
+  local version branch updated git_prefix git_var
+
+  # Git exports repository-selection variables to hooks. Clear them before
+  # inspecting the package so caller metadata cannot override git -C.
+  while IFS= read -r git_var; do
+    [ -n "\$git_var" ] && unset "\$git_var"
+  done < <(git rev-parse --local-env-vars 2>/dev/null)
+
+  # git -C searches parent directories. Require the package itself to be the
+  # worktree root so a non-Git local package cannot inherit unrelated metadata.
+  if ! git_prefix=\$(git -C "\$REPO" rev-parse --show-prefix 2>/dev/null) || [ -n "\$git_prefix" ]; then
+    version="unknown"
+  elif ! version=\$(git -C "\$REPO" describe --tags --exact-match HEAD 2>/dev/null); then
+    version=\$(git -C "\$REPO" rev-parse --short HEAD 2>/dev/null || printf 'unknown')
+  fi
+
+  if [ "\$version" = "unknown" ]; then
+    branch="unknown"
+    updated="unknown"
+  else
+    if [ -n "\$(git -C "\$REPO" status --porcelain 2>/dev/null)" ]; then
+      version="\${version}*"
+    fi
+    branch=\$(git -C "\$REPO" symbolic-ref --quiet --short HEAD 2>/dev/null || printf 'detached')
+    updated=\$(git -C "\$REPO" log -1 --format='%cd' --date=relative 2>/dev/null || printf 'unknown')
+  fi
+
+  printf '%s %s (branch: %s, updated: %s)\n' "$name" "\$version" "\$branch" "\$updated"
 }
 
 SCRIPT
@@ -222,6 +280,9 @@ case "\${1:-}" in
   --help|-h|help)
     _shiv_handle_help "\${1:-help}"
     ;;
+  --version)
+    _shiv_handle_version
+    ;;
   tasks)
     _shiv_handle_tasks "\$@"
     ;;
@@ -229,7 +290,7 @@ case "\${1:-}" in
     # --- Default task handling ---
     # No args: run default task directly.
     if [ -n "\$DEFAULT_TASK" ] && [ -z "\${1:-}" ]; then
-      exec mise -C "\$REPO" run -q "\$DEFAULT_TASK"
+      _shiv_exec_package_mise run -q "\$DEFAULT_TASK"
     fi
 
     # "--" as first arg: explicit disambiguation — send everything
@@ -237,9 +298,9 @@ case "\${1:-}" in
     if [ -n "\$DEFAULT_TASK" ] && [ "\${1:-}" = "--" ]; then
       shift
       if [ \$# -gt 0 ]; then
-        exec mise -C "\$REPO" run -q "\$DEFAULT_TASK" "\$@"
+        _shiv_exec_package_mise run -q "\$DEFAULT_TASK" "\$@"
       else
-        exec mise -C "\$REPO" run -q "\$DEFAULT_TASK"
+        _shiv_exec_package_mise run -q "\$DEFAULT_TASK"
       fi
     fi
 
@@ -271,18 +332,18 @@ case "\${1:-}" in
       # Guard: only expand SHIV_RESOLVED_ARGS when non-empty.
       # bash <4.4 treats "\${empty_array[@]}" as unbound under set -u.
       if [ \${#SHIV_RESOLVED_ARGS[@]} -gt 0 ]; then
-        exec mise -C "\$REPO" run -q "\$SHIV_RESOLVED_TASK" "\${SHIV_RESOLVED_ARGS[@]}"
+        _shiv_exec_package_mise run -q "\$SHIV_RESOLVED_TASK" "\${SHIV_RESOLVED_ARGS[@]}"
       else
-        exec mise -C "\$REPO" run -q "\$SHIV_RESOLVED_TASK"
+        _shiv_exec_package_mise run -q "\$SHIV_RESOLVED_TASK"
       fi
     elif [ "\$_shiv_rc" -eq 1 ]; then
       exit 1  # ambiguous — error already printed to stderr
     fi
     # rc=2 or no task map: fall through to default task or mise
     if [ -n "\$DEFAULT_TASK" ]; then
-      exec mise -C "\$REPO" run -q "\$DEFAULT_TASK" "\$@"
+      _shiv_exec_package_mise run -q "\$DEFAULT_TASK" "\$@"
     fi
-    exec mise -C "\$REPO" run -q "\$@"
+    _shiv_exec_package_mise run -q "\$@"
     ;;
 esac
 SCRIPT
@@ -297,8 +358,28 @@ shiv_create_alias_symlinks() {
   shift
   local aliases=("$@")
   for alias in "${aliases[@]}"; do
-    ln -sf "$name" "$SHIV_BIN_DIR/$alias"
+    ln -sf "$name" "$SHIV_BIN_DIR/$alias" || return 1
   done
+}
+
+# Refresh every generated artifact for a registered package.
+shiv_refresh_package() {
+  local name="$1" repo_dir="$2" require_cache_refresh="${3:-false}"
+  local aliases=()
+  local alias_output
+
+  shiv_create_shim "$name" "$repo_dir" || return 1
+  shiv_cache_tasks "$name" "$repo_dir" "$require_cache_refresh" || return 1
+  shiv_cache_task_map "$name" "$repo_dir" "$require_cache_refresh" || return 1
+
+  alias_output=$(shiv_registry_aliases "$name") || return 1
+  while IFS= read -r alias; do
+    [ -n "$alias" ] && aliases+=("$alias")
+  done <<< "$alias_output"
+
+  if [ "${#aliases[@]}" -gt 0 ]; then
+    shiv_create_alias_symlinks "$name" "${aliases[@]}" || return 1
+  fi
 }
 
 # Quote a value for POSIX-ish shell eval output.

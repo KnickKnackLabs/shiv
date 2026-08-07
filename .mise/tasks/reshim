@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+#MISE description="Regenerate shims and caches for every clean registered package"
+set -euo pipefail
+
+source "$MISE_CONFIG_ROOT/lib/shim.sh"
+
+# Git exports repository-selection variables to hooks. Clear them before
+# inspecting registered packages so caller metadata cannot override git -C.
+git_local_env_vars=$(git rev-parse --local-env-vars 2>/dev/null)
+while IFS= read -r git_var; do
+  [ -n "$git_var" ] && unset "$git_var"
+done <<< "$git_local_env_vars"
+
+shiv_init_registry
+
+COUNT=$(jq 'length' "$SHIV_REGISTRY")
+if [ "$COUNT" -eq 0 ]; then
+  echo "No tools registered."
+  exit 0
+fi
+
+SEP='|'
+RESULTS=()
+ENTRIES_FILE=$(mktemp)
+trap 'rm -f "$ENTRIES_FILE"' EXIT
+
+if ! shiv_registry_entries > "$ENTRIES_FILE"; then
+  echo "Error: could not read registered packages from $SHIV_REGISTRY" >&2
+  exit 1
+fi
+
+add_result() {
+  RESULTS+=("$1${SEP}$2${SEP}$3")
+}
+
+reshim_one() {
+  local name="$1" repo="$2"
+  local dirty_output
+
+  if [ ! -d "$repo" ]; then
+    add_result "$name" "✗" "repo not found at $repo"
+    echo "  ✗ $name — repo not found at $repo"
+    return 1
+  fi
+
+  if ! git -C "$repo" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    add_result "$name" "✗" "not a Git worktree"
+    echo "  ✗ $name — not a Git worktree"
+    return 1
+  fi
+
+  if ! dirty_output=$(git -C "$repo" status --porcelain 2>&1); then
+    add_result "$name" "✗" "could not inspect worktree"
+    echo "  ✗ $name — could not inspect worktree"
+    return 1
+  fi
+
+  if [ -n "$dirty_output" ]; then
+    add_result "$name" "⚠" "dirty worktree — skipped"
+    echo "  ⚠ $name — dirty worktree — skipped"
+    return 1
+  fi
+
+  if ! shiv_refresh_package "$name" "$repo" true; then
+    add_result "$name" "✗" "failed to refresh generated artifacts"
+    echo "  ✗ $name — failed to refresh generated artifacts"
+    return 1
+  fi
+
+  add_result "$name" "✓" "shim and caches refreshed"
+  echo "  ✓ $name — shim and caches refreshed"
+}
+
+echo "Reshimming $COUNT tool(s)..."
+echo ""
+
+rc=0
+while IFS=$'\t' read -r name repo _ref; do
+  reshim_one "$name" "$repo" || rc=1
+done < "$ENTRIES_FILE"
+
+echo ""
+printf '%s\n' "${RESULTS[@]}" \
+  | gum table -s "$SEP" -c "PACKAGE,STATUS,DETAIL" -p --border normal
+
+exit "$rc"

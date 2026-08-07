@@ -117,6 +117,101 @@ TASK
 }
 
 # ============================================================================
+# version interception
+# ============================================================================
+
+@test "shim: --version shows the exact tag, branch, and commit age" {
+  local repo_dir
+  repo_dir=$(create_caller_repo "myapp")
+  git -C "$repo_dir" tag --no-sign v1.2.3
+  git -C "$repo_dir" -c advice.detachedHead=false checkout --detach v1.2.3
+  shiv install myapp "$repo_dir" 2>/dev/null
+
+  run "$SHIV_BIN_DIR/myapp" --version
+  [ "$status" -eq 0 ]
+  [[ "$output" == "myapp v1.2.3 (branch: detached, updated: "*" ago)" ]]
+}
+
+@test "shim: --version falls back to the short commit" {
+  local repo_dir short
+  repo_dir=$(create_caller_repo "myapp")
+  short=$(git -C "$repo_dir" rev-parse --short HEAD)
+  shiv install myapp "$repo_dir" 2>/dev/null
+
+  run "$SHIV_BIN_DIR/myapp" --version
+  [ "$status" -eq 0 ]
+  [[ "$output" == "myapp $short (branch: main, updated: "*" ago)" ]]
+}
+
+@test "shim: --version marks a dirty checkout" {
+  local repo_dir short
+  repo_dir=$(create_caller_repo "myapp")
+  short=$(git -C "$repo_dir" rev-parse --short HEAD)
+  touch "$repo_dir/uncommitted.txt"
+  shiv install myapp "$repo_dir" 2>/dev/null
+
+  run "$SHIV_BIN_DIR/myapp" --version
+  [ "$status" -eq 0 ]
+  [[ "$output" == "myapp $short* (branch: main, updated: "*" ago)" ]]
+}
+
+@test "shim: --version is handled before a named default task" {
+  local repo_dir
+  repo_dir=$(create_named_default_repo "myapp")
+  shiv install myapp "$repo_dir" 2>/dev/null
+
+  run "$SHIV_BIN_DIR/myapp" --version
+  [ "$status" -eq 0 ]
+  [[ "$output" == "myapp "*" (branch: main, updated: "*" ago)" ]]
+  [[ "$output" != *"NAMED_DEFAULT"* ]]
+}
+
+@test "shim: --version reports unknown metadata outside Git" {
+  local repo_dir="$TEST_HOME/repos/myapp"
+  mkdir -p "$repo_dir"
+  shiv_create_shim "myapp" "$repo_dir"
+
+  run "$SHIV_BIN_DIR/myapp" --version
+  [ "$status" -eq 0 ]
+  [ "$output" = "myapp unknown (branch: unknown, updated: unknown)" ]
+}
+
+@test "shim: --version does not inherit Git metadata from a parent checkout" {
+  local parent_dir="$TEST_HOME/repos/parent" repo_dir="$TEST_HOME/repos/parent/myapp"
+  mkdir -p "$parent_dir"
+  git -C "$parent_dir" init -q -b unrelated
+  git -C "$parent_dir" config user.email "test@test.com"
+  git -C "$parent_dir" config user.name "Test"
+  touch "$parent_dir/tracked"
+  git -C "$parent_dir" add tracked
+  git -C "$parent_dir" commit -q -m "init"
+  mkdir -p "$repo_dir"
+  shiv_create_shim "myapp" "$repo_dir"
+
+  run "$SHIV_BIN_DIR/myapp" --version
+  [ "$status" -eq 0 ]
+  [ "$output" = "myapp unknown (branch: unknown, updated: unknown)" ]
+}
+
+@test "shim: --version ignores inherited Git repository environment" {
+  local parent_dir="$TEST_HOME/repos/parent" repo_dir short
+  repo_dir=$(create_caller_repo "myapp")
+  short=$(git -C "$repo_dir" rev-parse --short HEAD)
+  mkdir -p "$parent_dir"
+  git -C "$parent_dir" init -q -b unrelated
+  git -C "$parent_dir" config user.email "test@test.com"
+  git -C "$parent_dir" config user.name "Test"
+  touch "$parent_dir/tracked"
+  git -C "$parent_dir" add tracked
+  git -C "$parent_dir" commit -q -m "init"
+  shiv install myapp "$repo_dir" 2>/dev/null
+
+  run env GIT_DIR="$parent_dir/.git" "$SHIV_BIN_DIR/myapp" --version
+  [ "$status" -eq 0 ]
+  [[ "$output" == "myapp $short (branch: main, updated: "*" ago)" ]]
+}
+
+# ============================================================================
 # tasks interception
 # ============================================================================
 
@@ -389,9 +484,7 @@ TASK
 # test "cache miss generates task map on the fly" covers that path.
 populate_task_map() {
   local name="$1" repo_dir="$2"
-  mkdir -p "$SHIV_CACHE_DIR/tasks"
-  mise tasks --json --hidden -C "$repo_dir" 2>/dev/null \
-    | jq -r '.[].name | gsub(":"; " ")' > "$SHIV_CACHE_DIR/tasks/$name"
+  SHIV_SKIP_CACHE= shiv_cache_task_map "$name" "$repo_dir"
 }
 
 @test "shim: spaces resolve to colons end-to-end" {
@@ -403,6 +496,77 @@ populate_task_map() {
   run "$SHIV_BIN_DIR/mytool" dev test unit
   [ "$status" -eq 0 ]
   [[ "$output" == *"DEV_TEST_UNIT"* ]]
+}
+
+@test "shim: install-local task map ignores conflicting runtime XDG cache" {
+  local repo_dir runtime_cache
+  repo_dir=$(create_resolve_repo "mytool")
+  shiv install mytool "$repo_dir" 2>/dev/null
+  populate_task_map "mytool" "$repo_dir"
+
+  runtime_cache="$TEST_HOME/runtime-cache"
+  mkdir -p "$runtime_cache/shiv/tasks"
+  printf '%s\n' "stale task" > "$runtime_cache/shiv/tasks/mytool"
+
+  run env XDG_CACHE_HOME="$runtime_cache" "$SHIV_BIN_DIR/mytool" dev test unit
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"DEV_TEST_UNIT"* ]]
+}
+
+@test "shim: same package shims keep separate install-local task maps" {
+  local repo_dir first_bin first_cache second_bin second_cache runtime_cache
+  repo_dir=$(create_resolve_repo "mytool")
+  first_bin="$TEST_HOME/versions/one/bin"
+  first_cache="$TEST_HOME/versions/one/cache"
+  second_bin="$TEST_HOME/versions/two/bin"
+  second_cache="$TEST_HOME/versions/two/cache"
+  runtime_cache="$TEST_HOME/runtime-cache"
+
+  SHIV_BIN_DIR="$first_bin" SHIV_CACHE_DIR="$first_cache" shiv_create_shim "mytool" "$repo_dir"
+  mkdir -p "$first_cache/tasks"
+  printf '%s\n' "dev test unit" > "$first_cache/tasks/mytool"
+
+  SHIV_BIN_DIR="$second_bin" SHIV_CACHE_DIR="$second_cache" shiv_create_shim "mytool" "$repo_dir"
+  mkdir -p "$second_cache/tasks" "$runtime_cache/shiv/tasks"
+  printf '%s\n' "greet loud" > "$second_cache/tasks/mytool"
+  printf '%s\n' "stale task" > "$runtime_cache/shiv/tasks/mytool"
+
+  run env XDG_CACHE_HOME="$runtime_cache" "$first_bin/mytool" dev test unit
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"DEV_TEST_UNIT"* ]]
+
+  run env XDG_CACHE_HOME="$runtime_cache" "$second_bin/mytool" greet loud
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"GREET_LOUD"* ]]
+}
+
+@test "shim: default global cache stays fixed at its generation-time XDG path" {
+  local repo_dir generation_xdg runtime_xdg task_map
+  repo_dir=$(create_resolve_repo "mytool")
+  generation_xdg="$TEST_HOME/generation-cache"
+  runtime_xdg="$TEST_HOME/runtime-cache"
+
+  unset SHIV_CACHE_DIR
+  export XDG_CACHE_HOME="$generation_xdg"
+  source "$REPO_DIR/lib/cache.sh"
+  [ "$SHIV_CACHE_DIR" = "$generation_xdg/shiv" ]
+
+  shiv_create_shim "mytool" "$repo_dir"
+  task_map="$generation_xdg/shiv/tasks/mytool"
+  mkdir -p "$(dirname "$task_map")" "$runtime_xdg/shiv/tasks"
+  printf '%s\n' "dev test unit" > "$task_map"
+  printf '%s\n' "stale task" > "$runtime_xdg/shiv/tasks/mytool"
+
+  run env -u SHIV_SKIP_CACHE XDG_CACHE_HOME="$runtime_xdg" "$SHIV_BIN_DIR/mytool" dev test unit
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"DEV_TEST_UNIT"* ]]
+
+  rm -f "$task_map"
+  run env -u SHIV_SKIP_CACHE XDG_CACHE_HOME="$runtime_xdg" "$SHIV_BIN_DIR/mytool" dev test unit
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"DEV_TEST_UNIT"* ]]
+  grep -q '^dev test unit$' "$task_map"
+  grep -q '^stale task$' "$runtime_xdg/shiv/tasks/mytool"
 }
 
 @test "shim: tasks groups colon-namespaced tasks" {
@@ -464,19 +628,48 @@ populate_task_map() {
   [[ "$output" == "GREET_LOUD " ]] || [[ "$output" == "GREET_LOUD" ]]
 }
 
-@test "shim: cache miss generates task map on the fly" {
-  local repo_dir
+@test "shim: cache miss generates task map in install-local cache" {
+  local repo_dir runtime_cache
   repo_dir=$(create_resolve_repo "mytool")
   shiv install mytool "$repo_dir" 2>/dev/null
 
+  runtime_cache="$TEST_HOME/runtime-cache"
   [ ! -f "$SHIV_CACHE_DIR/tasks/mytool" ]
+  [ ! -f "$runtime_cache/shiv/tasks/mytool" ]
 
-  # The shim uses XDG_CACHE_HOME (not SHIV_CACHE_DIR) for task maps.
-  run env -u SHIV_SKIP_CACHE XDG_CACHE_HOME="$TEST_HOME/.cache" "$SHIV_BIN_DIR/mytool" dev test unit
+  run env -u SHIV_SKIP_CACHE XDG_CACHE_HOME="$runtime_cache" "$SHIV_BIN_DIR/mytool" dev test unit
   [ "$status" -eq 0 ]
   [[ "$output" == *"DEV_TEST_UNIT"* ]]
 
   [ -f "$SHIV_CACHE_DIR/tasks/mytool" ]
+  [ ! -f "$runtime_cache/shiv/tasks/mytool" ]
+}
+
+@test "shim: cache miss and execution ignore inherited mise config override" {
+  local repo_dir parent_config
+  repo_dir=$(create_resolve_repo "mytool")
+  shiv install mytool "$repo_dir" 2>/dev/null
+
+  parent_config="$TEST_HOME/parent-config.toml"
+  cat > "$parent_config" <<'TOML'
+[tasks.parent-only]
+description = "Parent task should not leak"
+run = "echo PARENT_ONLY"
+TOML
+  mise trust "$parent_config" 2>/dev/null
+
+  [ ! -f "$SHIV_CACHE_DIR/tasks/mytool" ]
+
+  run env -u SHIV_SKIP_CACHE \
+    MISE_OVERRIDE_CONFIG_FILENAMES="$parent_config" \
+    XDG_CACHE_HOME="$TEST_HOME/.cache" \
+    "$SHIV_BIN_DIR/mytool" dev test unit
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"DEV_TEST_UNIT"* ]]
+  [[ "$output" != *"PARENT_ONLY"* ]]
+
+  grep -q "^dev test unit$" "$SHIV_CACHE_DIR/tasks/mytool"
+  ! grep -q "parent-only" "$SHIV_CACHE_DIR/tasks/mytool"
 }
 
 @test "shim: unresolved input falls through to mise" {

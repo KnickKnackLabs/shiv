@@ -51,6 +51,60 @@ setup() {
   done < "$SHIV_CACHE_DIR/completions/shiv.cache"
 }
 
+@test "cache: inherited mise config override does not hide package tasks" {
+  local repo_dir parent_config cache
+  repo_dir="$BATS_TEST_TMPDIR/package-with-tasks"
+  mkdir -p "$repo_dir"
+  cat > "$repo_dir/mise.toml" <<TOML
+[tasks.hello]
+description = "Say hello"
+run = "echo hi"
+TOML
+  mise trust "$repo_dir/mise.toml" 2>/dev/null
+
+  parent_config="$BATS_TEST_TMPDIR/parent-config.toml"
+  cat > "$parent_config" <<TOML
+[tasks.parent]
+description = "Parent task"
+run = "echo parent"
+TOML
+  mise trust "$parent_config" 2>/dev/null
+  export MISE_OVERRIDE_CONFIG_FILENAMES="$parent_config"
+
+  shiv_cache_tasks "package-with-tasks" "$repo_dir"
+
+  cache="$SHIV_CACHE_DIR/completions/package-with-tasks.cache"
+  grep -q "^hello" "$cache"
+  ! grep -q "^parent" "$cache"
+}
+
+@test "cache: inherited mise config override does not hide task map entries" {
+  local repo_dir parent_config cache
+  repo_dir="$BATS_TEST_TMPDIR/package-with-task-map"
+  mkdir -p "$repo_dir"
+  cat > "$repo_dir/mise.toml" <<TOML
+[tasks."hello:world"]
+description = "Say hello"
+run = "echo hi"
+TOML
+  mise trust "$repo_dir/mise.toml" 2>/dev/null
+
+  parent_config="$BATS_TEST_TMPDIR/parent-config.toml"
+  cat > "$parent_config" <<TOML
+[tasks.parent]
+description = "Parent task"
+run = "echo parent"
+TOML
+  mise trust "$parent_config" 2>/dev/null
+  export MISE_OVERRIDE_CONFIG_FILENAMES="$parent_config"
+
+  shiv_cache_task_map "package-with-task-map" "$repo_dir"
+
+  cache="$SHIV_CACHE_DIR/tasks/package-with-task-map"
+  grep -q "^hello world$" "$cache"
+  ! grep -q "^parent$" "$cache"
+}
+
 @test "cache: shiv_cache_remove deletes cache file" {
   shiv_cache_tasks "shiv" "$REPO_DIR"
   [ -f "$SHIV_CACHE_DIR/completions/shiv.cache" ]
