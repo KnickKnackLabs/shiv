@@ -235,8 +235,10 @@ cd shiv && mise trust && mise install
 mise run test`}</CodeBlock>
 
       <Paragraph>
-        Tests use <Link href="https://github.com/bats-core/bats-core">BATS</Link> — the default run covers {testCount} tests
-        across {defaultTestFiles.length} suites. Completion tests run separately.
+        Tests use the <Link href="https://github.com/KnickKnackLabs/bats-core">KKL-maintained BATS fork</Link> with Rush.
+        The measured eight-job default schedules isolated tests across and within files,
+        covering {testCount} tests across {defaultTestFiles.length} suites. Use <Code>mise run test --jobs 1</Code> for serial debugging.
+        Completion tests run separately.
       </Paragraph>
     </Section>
 

@@ -216,8 +216,12 @@ TASK
   git -C "$repo_dir" add .
   git -C "$repo_dir" commit -q -m "init"
 
-  export XDG_CACHE_HOME="$TEST_HOME/.cache"
   run_install "myapp" "$repo_dir"
+
+  # Isolate the generated shim's runtime cache after dependency setup. Applying
+  # this earlier hides Mise's own tool metadata while the installer renders its
+  # Gum summary, which is outside this test's runtime-override claim.
+  export XDG_CACHE_HOME="$TEST_HOME/.cache"
   rm -f "$SHIV_CACHE_DIR/tasks/myapp"
 
   parent_config="$TEST_HOME/parent-config.toml"
