@@ -19,7 +19,6 @@ setup() {
 
   mkdir -p "$SHIV_BIN_DIR"
   shiv_init_registry
-  setup_shiv_on_path
 
   export SHIV_SKIP_CACHE=1
 }
@@ -61,7 +60,7 @@ TASK
 @test "shim: template uses unconditional package-specific caller assignment" {
   local repo_dir
   repo_dir=$(create_caller_repo "myapp")
-  shiv install myapp "$repo_dir" 2>/dev/null
+  shiv_create_shim "myapp" "$repo_dir"
 
   grep -q 'MYAPP_CALLER_PWD="$PWD"' "$SHIV_BIN_DIR/myapp"
   ! grep -q 'export CALLER_PWD=' "$SHIV_BIN_DIR/myapp"
@@ -70,7 +69,7 @@ TASK
 @test "shim: package-specific caller var reflects actual cwd" {
   local repo_dir
   repo_dir=$(create_caller_repo "myapp")
-  shiv install myapp "$repo_dir" 2>/dev/null
+  shiv_create_shim "myapp" "$repo_dir"
 
   run bash -c "cd /tmp && '$SHIV_BIN_DIR/myapp' show-caller"
   [ "$status" -eq 0 ]
@@ -80,7 +79,7 @@ TASK
 @test "shim: package-specific caller var overrides stale value from environment" {
   local repo_dir
   repo_dir=$(create_caller_repo "myapp")
-  shiv install myapp "$repo_dir" 2>/dev/null
+  shiv_create_shim "myapp" "$repo_dir"
 
   # Even if MYAPP_CALLER_PWD is set in the environment, the shim should use $PWD
   run bash -c "export MYAPP_CALLER_PWD='/some/stale/dir' && cd /tmp && '$SHIV_BIN_DIR/myapp' show-caller"
@@ -108,7 +107,7 @@ TASK
   mkdir -p "$SHIV_CACHE_DIR/completions"
   printf 'show-caller\tPrint MY_TOOL_CALLER_PWD\n' > "$SHIV_CACHE_DIR/completions/my-tool.cache"
 
-  shiv install my-tool "$repo_dir" 2>/dev/null
+  shiv_create_shim "my-tool" "$repo_dir"
 
   grep -q 'MY_TOOL_CALLER_PWD="$PWD"' "$SHIV_BIN_DIR/my-tool"
   run bash -c "cd /tmp && '$SHIV_BIN_DIR/my-tool' show-caller"
@@ -125,7 +124,7 @@ TASK
   repo_dir=$(create_caller_repo "myapp")
   git -C "$repo_dir" tag --no-sign v1.2.3
   git -C "$repo_dir" -c advice.detachedHead=false checkout --detach v1.2.3
-  shiv install myapp "$repo_dir" 2>/dev/null
+  shiv_create_shim "myapp" "$repo_dir"
 
   run "$SHIV_BIN_DIR/myapp" --version
   [ "$status" -eq 0 ]
@@ -136,7 +135,7 @@ TASK
   local repo_dir short
   repo_dir=$(create_caller_repo "myapp")
   short=$(git -C "$repo_dir" rev-parse --short HEAD)
-  shiv install myapp "$repo_dir" 2>/dev/null
+  shiv_create_shim "myapp" "$repo_dir"
 
   run "$SHIV_BIN_DIR/myapp" --version
   [ "$status" -eq 0 ]
@@ -148,7 +147,7 @@ TASK
   repo_dir=$(create_caller_repo "myapp")
   short=$(git -C "$repo_dir" rev-parse --short HEAD)
   touch "$repo_dir/uncommitted.txt"
-  shiv install myapp "$repo_dir" 2>/dev/null
+  shiv_create_shim "myapp" "$repo_dir"
 
   run "$SHIV_BIN_DIR/myapp" --version
   [ "$status" -eq 0 ]
@@ -158,7 +157,7 @@ TASK
 @test "shim: --version is handled before a named default task" {
   local repo_dir
   repo_dir=$(create_named_default_repo "myapp")
-  shiv install myapp "$repo_dir" 2>/dev/null
+  shiv_create_shim "myapp" "$repo_dir"
 
   run "$SHIV_BIN_DIR/myapp" --version
   [ "$status" -eq 0 ]
@@ -204,7 +203,7 @@ TASK
   touch "$parent_dir/tracked"
   git -C "$parent_dir" add tracked
   git -C "$parent_dir" commit -q -m "init"
-  shiv install myapp "$repo_dir" 2>/dev/null
+  shiv_create_shim "myapp" "$repo_dir"
 
   run env GIT_DIR="$parent_dir/.git" "$SHIV_BIN_DIR/myapp" --version
   [ "$status" -eq 0 ]
@@ -218,7 +217,7 @@ TASK
 @test "shim: 'tasks' lists available local tasks in formatted output" {
   local repo_dir
   repo_dir=$(create_caller_repo "myapp")
-  shiv install myapp "$repo_dir" 2>/dev/null
+  shiv_create_shim "myapp" "$repo_dir"
 
   run "$SHIV_BIN_DIR/myapp" tasks
   [ "$status" -eq 0 ]
@@ -248,7 +247,7 @@ TASK
   chmod +x "$parent_dir/.mise/tasks/parent-task"
   mise trust "$parent_dir/mise.toml" 2>/dev/null
 
-  shiv install myapp "$repo_dir" 2>/dev/null
+  shiv_create_shim "myapp" "$repo_dir"
 
   run "$SHIV_BIN_DIR/myapp" tasks
   [ "$status" -eq 0 ]
@@ -272,7 +271,7 @@ TASK
   chmod +x "$parent_dir/.mise/tasks/parent-task"
   mise trust "$parent_dir/mise.toml" 2>/dev/null
 
-  shiv install myapp "$repo_dir" 2>/dev/null
+  shiv_create_shim "myapp" "$repo_dir"
 
   run "$SHIV_BIN_DIR/myapp" --help
   [ "$status" -eq 0 ]
@@ -298,7 +297,7 @@ TASK
   chmod +x "$parent_dir/.mise/tasks/parent-task"
   mise trust "$parent_dir/mise.toml" 2>/dev/null
 
-  shiv install myapp "$repo_dir" 2>/dev/null
+  shiv_create_shim "myapp" "$repo_dir"
 
   bin_dir="$BATS_TEST_TMPDIR/no-jq-bin"
   mkdir -p "$bin_dir"
@@ -327,7 +326,7 @@ TASK
   chmod +x "$repo_dir/.mise/tasks/tasks"
   git -C "$repo_dir" add . && git -C "$repo_dir" commit -q -m "add tasks task"
 
-  shiv install myapp "$repo_dir" 2>/dev/null
+  shiv_create_shim "myapp" "$repo_dir"
 
   run "$SHIV_BIN_DIR/myapp" tasks
   [ "$status" -eq 0 ]
@@ -369,7 +368,7 @@ TASK
 @test "shim: --help routes to named default task help" {
   local repo_dir
   repo_dir=$(create_named_default_repo "myapp")
-  shiv install myapp "$repo_dir" 2>/dev/null
+  shiv_create_shim "myapp" "$repo_dir"
 
   run "$SHIV_BIN_DIR/myapp" --help
   [ "$status" -eq 0 ]
@@ -389,7 +388,7 @@ TASK
   chmod +x "$repo_dir/.mise/tasks/help"
   git -C "$repo_dir" add . && git -C "$repo_dir" commit -q -m "add help task"
 
-  shiv install myapp "$repo_dir" 2>/dev/null
+  shiv_create_shim "myapp" "$repo_dir"
 
   run "$SHIV_BIN_DIR/myapp" --help
   [ "$status" -eq 0 ]
@@ -408,7 +407,7 @@ TASK
   chmod +x "$repo_dir/.mise/tasks/help"
   git -C "$repo_dir" add . && git -C "$repo_dir" commit -q -m "add help task"
 
-  shiv install myapp "$repo_dir" 2>/dev/null
+  shiv_create_shim "myapp" "$repo_dir"
 
   run "$SHIV_BIN_DIR/myapp" help
   [ "$status" -eq 0 ]
@@ -418,7 +417,7 @@ TASK
 @test "shim: --help falls back to formatted local task list" {
   local repo_dir
   repo_dir=$(create_caller_repo "myapp")
-  shiv install myapp "$repo_dir" 2>/dev/null
+  shiv_create_shim "myapp" "$repo_dir"
 
   run "$SHIV_BIN_DIR/myapp" --help
   [ "$status" -eq 0 ]
@@ -490,7 +489,7 @@ populate_task_map() {
 @test "shim: spaces resolve to colons end-to-end" {
   local repo_dir
   repo_dir=$(create_resolve_repo "mytool")
-  shiv install mytool "$repo_dir" 2>/dev/null
+  shiv_create_shim "mytool" "$repo_dir"
   populate_task_map "mytool" "$repo_dir"
 
   run "$SHIV_BIN_DIR/mytool" dev test unit
@@ -501,7 +500,7 @@ populate_task_map() {
 @test "shim: install-local task map ignores conflicting runtime XDG cache" {
   local repo_dir runtime_cache
   repo_dir=$(create_resolve_repo "mytool")
-  shiv install mytool "$repo_dir" 2>/dev/null
+  shiv_create_shim "mytool" "$repo_dir"
   populate_task_map "mytool" "$repo_dir"
 
   runtime_cache="$TEST_HOME/runtime-cache"
@@ -572,7 +571,7 @@ populate_task_map() {
 @test "shim: tasks groups colon-namespaced tasks" {
   local repo_dir
   repo_dir=$(create_resolve_repo "mytool")
-  shiv install mytool "$repo_dir" 2>/dev/null
+  shiv_create_shim "mytool" "$repo_dir"
 
   run "$SHIV_BIN_DIR/mytool" tasks
   [ "$status" -eq 0 ]
@@ -585,7 +584,7 @@ populate_task_map() {
 @test "shim: spaces resolve with remaining args passed through" {
   local repo_dir
   repo_dir=$(create_resolve_repo "mytool")
-  shiv install mytool "$repo_dir" 2>/dev/null
+  shiv_create_shim "mytool" "$repo_dir"
   populate_task_map "mytool" "$repo_dir"
 
   run "$SHIV_BIN_DIR/mytool" dev test unit myarg
@@ -596,7 +595,7 @@ populate_task_map() {
 @test "shim: ambiguous input errors with guidance" {
   local repo_dir
   repo_dir=$(create_resolve_repo "mytool")
-  shiv install mytool "$repo_dir" 2>/dev/null
+  shiv_create_shim "mytool" "$repo_dir"
   populate_task_map "mytool" "$repo_dir"
 
   run "$SHIV_BIN_DIR/mytool" greet loud
@@ -608,7 +607,7 @@ populate_task_map() {
 @test "shim: -- selects parent task with args" {
   local repo_dir
   repo_dir=$(create_resolve_repo "mytool")
-  shiv install mytool "$repo_dir" 2>/dev/null
+  shiv_create_shim "mytool" "$repo_dir"
   populate_task_map "mytool" "$repo_dir"
 
   run "$SHIV_BIN_DIR/mytool" greet -- loud
@@ -619,7 +618,7 @@ populate_task_map() {
 @test "shim: trailing -- selects child task with no args" {
   local repo_dir
   repo_dir=$(create_resolve_repo "mytool")
-  shiv install mytool "$repo_dir" 2>/dev/null
+  shiv_create_shim "mytool" "$repo_dir"
   populate_task_map "mytool" "$repo_dir"
 
   run "$SHIV_BIN_DIR/mytool" greet loud --
@@ -631,7 +630,7 @@ populate_task_map() {
 @test "shim: cache miss generates task map in install-local cache" {
   local repo_dir runtime_cache
   repo_dir=$(create_resolve_repo "mytool")
-  shiv install mytool "$repo_dir" 2>/dev/null
+  shiv_create_shim "mytool" "$repo_dir"
 
   runtime_cache="$TEST_HOME/runtime-cache"
   [ ! -f "$SHIV_CACHE_DIR/tasks/mytool" ]
@@ -648,7 +647,7 @@ populate_task_map() {
 @test "shim: cache miss and execution ignore inherited mise config override" {
   local repo_dir parent_config
   repo_dir=$(create_resolve_repo "mytool")
-  shiv install mytool "$repo_dir" 2>/dev/null
+  shiv_create_shim "mytool" "$repo_dir"
 
   parent_config="$TEST_HOME/parent-config.toml"
   cat > "$parent_config" <<'TOML'
@@ -675,7 +674,7 @@ TOML
 @test "shim: unresolved input falls through to mise" {
   local repo_dir
   repo_dir=$(create_resolve_repo "mytool")
-  shiv install mytool "$repo_dir" 2>/dev/null
+  shiv_create_shim "mytool" "$repo_dir"
   populate_task_map "mytool" "$repo_dir"
 
   run "$SHIV_BIN_DIR/mytool" nonexistent-thing
@@ -685,7 +684,7 @@ TOML
 @test "shim: colons still work (backward compatible)" {
   local repo_dir
   repo_dir=$(create_resolve_repo "mytool")
-  shiv install mytool "$repo_dir" 2>/dev/null
+  shiv_create_shim "mytool" "$repo_dir"
   populate_task_map "mytool" "$repo_dir"
 
   run "$SHIV_BIN_DIR/mytool" dev:test:unit
@@ -745,7 +744,7 @@ TASK
 @test "shim: _default runs with no args" {
   local repo_dir
   repo_dir=$(create_default_plus_subtasks_repo "asktool")
-  shiv install asktool "$repo_dir" 2>/dev/null
+  shiv_create_shim "asktool" "$repo_dir"
   populate_task_map "asktool" "$repo_dir"
 
   run "$SHIV_BIN_DIR/asktool"
@@ -756,7 +755,7 @@ TASK
 @test "shim: subtask name is ambiguous when _default exists" {
   local repo_dir
   repo_dir=$(create_default_plus_subtasks_repo "asktool")
-  shiv install asktool "$repo_dir" 2>/dev/null
+  shiv_create_shim "asktool" "$repo_dir"
   populate_task_map "asktool" "$repo_dir"
 
   run "$SHIV_BIN_DIR/asktool" question hello
@@ -768,7 +767,7 @@ TASK
 @test "shim: subtask alone is ambiguous when _default exists" {
   local repo_dir
   repo_dir=$(create_default_plus_subtasks_repo "asktool")
-  shiv install asktool "$repo_dir" 2>/dev/null
+  shiv_create_shim "asktool" "$repo_dir"
   populate_task_map "asktool" "$repo_dir"
 
   run "$SHIV_BIN_DIR/asktool" info
@@ -779,7 +778,7 @@ TASK
 @test "shim: -- before subtask name routes to _default" {
   local repo_dir
   repo_dir=$(create_default_plus_subtasks_repo "asktool")
-  shiv install asktool "$repo_dir" 2>/dev/null
+  shiv_create_shim "asktool" "$repo_dir"
   populate_task_map "asktool" "$repo_dir"
 
   run "$SHIV_BIN_DIR/asktool" -- question hello
@@ -790,7 +789,7 @@ TASK
 @test "shim: subtask -- args routes to subtask" {
   local repo_dir
   repo_dir=$(create_default_plus_subtasks_repo "asktool")
-  shiv install asktool "$repo_dir" 2>/dev/null
+  shiv_create_shim "asktool" "$repo_dir"
   populate_task_map "asktool" "$repo_dir"
 
   run "$SHIV_BIN_DIR/asktool" question -- hello
@@ -802,7 +801,7 @@ TASK
 @test "shim: unrecognized arg falls through to _default" {
   local repo_dir
   repo_dir=$(create_default_plus_subtasks_repo "asktool")
-  shiv install asktool "$repo_dir" 2>/dev/null
+  shiv_create_shim "asktool" "$repo_dir"
   populate_task_map "asktool" "$repo_dir"
 
   run "$SHIV_BIN_DIR/asktool" "summarize this"
@@ -813,7 +812,7 @@ TASK
 @test "shim: flag args fall through to _default" {
   local repo_dir
   repo_dir=$(create_default_plus_subtasks_repo "asktool")
-  shiv install asktool "$repo_dir" 2>/dev/null
+  shiv_create_shim "asktool" "$repo_dir"
   populate_task_map "asktool" "$repo_dir"
 
   run "$SHIV_BIN_DIR/asktool" -m sonnet
@@ -824,7 +823,7 @@ TASK
 @test "shim: -- with no further args runs _default with no args" {
   local repo_dir
   repo_dir=$(create_default_plus_subtasks_repo "asktool")
-  shiv install asktool "$repo_dir" 2>/dev/null
+  shiv_create_shim "asktool" "$repo_dir"
   populate_task_map "asktool" "$repo_dir"
 
   run "$SHIV_BIN_DIR/asktool" --
