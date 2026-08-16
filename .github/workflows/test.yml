@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - lib/**
+      - libexec/**
       - test/**
       - .mise/tasks/**
       - mise.toml
@@ -11,6 +12,7 @@ on:
     branches: [main]
     paths:
       - lib/**
+      - libexec/**
       - test/**
       - .mise/tasks/**
       - mise.toml
@@ -40,7 +42,7 @@ jobs:
       - name: Install tools
         run: |
           mise trust
-          mise install bats
+          mise install
 
       - name: Run tests
         run: mise run test
