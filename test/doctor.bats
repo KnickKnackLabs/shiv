@@ -21,6 +21,7 @@ setup() {
   mkdir -p "$SHIV_BIN_DIR"
   shiv_init_registry
   setup_shiv_on_path
+  mock_gum_formatting
 }
 
 
@@ -29,13 +30,10 @@ create_installed_package() {
   local name="$1"
   local repo_dir="$SHIV_PACKAGES_DIR/$name"
 
+  # Doctor only needs a valid worktree for this fixture; commits and identity
+  # would add process work without exercising another health check.
   mkdir -p "$repo_dir"
   git -C "$repo_dir" init -q -b main
-  git -C "$repo_dir" config user.email "test@test.com"
-  git -C "$repo_dir" config user.name "Test"
-  touch "$repo_dir/README.md"
-  git -C "$repo_dir" add .
-  git -C "$repo_dir" commit -q -m "init"
 
   shift
   shiv_register "$name" "$repo_dir" "$@"
@@ -64,7 +62,8 @@ run_doctor() {
 # Header
 # ============================================================================
 
-@test "doctor: shows health header" {
+@test "doctor: shows health header through real Gum rendering" {
+  use_real_gum
   run run_doctor
   echo "$output" | grep -q "SHIV HEALTH"
   echo "$output" | grep -q "Registry"

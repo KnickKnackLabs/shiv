@@ -20,6 +20,7 @@ setup() {
   mkdir -p "$SHIV_BIN_DIR"
   shiv_init_registry
   setup_shiv_on_path
+  mock_gum_formatting
 
   export SHIV_SKIP_CACHE=1
 
@@ -28,10 +29,34 @@ setup() {
 }
 
 
-# Helper: create a minimal installed package (repo, shim, registry, cache)
+register_package_fixture() {
+  local name="$1" repo_dir="$2"
+  shift 2
+
+  shiv_register "$name" "$repo_dir" "$@"
+  shiv_create_shim "$name" "$repo_dir"
+
+  mkdir -p "$SHIV_CACHE_DIR/completions"
+  printf 'hello\tSay hello\n' > "$SHIV_CACHE_DIR/completions/$name.cache"
+
+  if [ "$#" -gt 0 ]; then
+    shiv_create_alias_symlinks "$name" "$@"
+  fi
+}
+
+# Most uninstall behavior does not depend on Git or managed package cleanup.
+# Keep those fixtures local so tests do not manufacture irrelevant repositories.
 create_installed_package() {
-  local name="$1"
-  local repo_dir="$SHIV_PACKAGES_DIR/$name"
+  local name="$1" repo_dir="$TEST_HOME/local-packages/$1"
+  shift
+
+  mkdir -p "$repo_dir"
+  register_package_fixture "$name" "$repo_dir" "$@"
+}
+
+create_index_installed_package() {
+  local name="$1" repo_dir="$SHIV_PACKAGES_DIR/$1"
+  shift
 
   mkdir -p "$repo_dir"
   git -C "$repo_dir" init -q -b main
@@ -41,32 +66,18 @@ create_installed_package() {
   git -C "$repo_dir" add .
   git -C "$repo_dir" commit -q -m "init"
 
-  shift
-  shiv_register "$name" "$repo_dir" "$@"
-  shiv_create_shim "$name" "$repo_dir"
-
-  # Create a cache file
-  mkdir -p "$SHIV_CACHE_DIR/completions"
-  printf 'hello\tSay hello\n' > "$SHIV_CACHE_DIR/completions/$name.cache"
-
-  # Create alias symlinks if provided
-  local aliases=("$@")
-  if [ ${#aliases[@]} -gt 0 ]; then
-    shiv_create_alias_symlinks "$name" "${aliases[@]}"
-  fi
+  register_package_fixture "$name" "$repo_dir" "$@"
 }
 
-# Helper: create an installed package with a bare remote (so @{upstream} works)
+# Package-history safety tests need a real upstream and local Git history.
 create_installed_package_with_remote() {
-  local name="$1"
-  local repo_dir="$SHIV_PACKAGES_DIR/$name"
-  local bare_dir="$TEST_HOME/remotes/$name.git"
+  local name="$1" repo_dir="$SHIV_PACKAGES_DIR/$1"
+  local bare_dir="$TEST_HOME/remotes/$1.git"
+  shift
 
-  # Create bare remote
   mkdir -p "$bare_dir"
   git -C "$bare_dir" init -q --bare
 
-  # Clone it (sets up tracking automatically)
   git clone -q "$bare_dir" "$repo_dir"
   git -C "$repo_dir" config user.email "test@test.com"
   git -C "$repo_dir" config user.name "Test"
@@ -75,19 +86,7 @@ create_installed_package_with_remote() {
   git -C "$repo_dir" commit -q -m "init"
   git -C "$repo_dir" push -q
 
-  shift
-  shiv_register "$name" "$repo_dir" "$@"
-  shiv_create_shim "$name" "$repo_dir"
-
-  # Create a cache file
-  mkdir -p "$SHIV_CACHE_DIR/completions"
-  printf 'hello\tSay hello\n' > "$SHIV_CACHE_DIR/completions/$name.cache"
-
-  # Create alias symlinks if provided
-  local aliases=("$@")
-  if [ ${#aliases[@]} -gt 0 ]; then
-    shiv_create_alias_symlinks "$name" "${aliases[@]}"
-  fi
+  register_package_fixture "$name" "$repo_dir" "$@"
 }
 
 # Helper: run shiv uninstall through the mock shim
@@ -181,8 +180,9 @@ MOCK
 # Summary card
 # ============================================================================
 
-@test "uninstall: summary card shows package details" {
+@test "uninstall: summary card renders package details through real Gum" {
   create_installed_package "alpha"
+  use_real_gum
 
   run run_uninstall "alpha" "true"
   [ "$status" -eq 0 ]
@@ -280,7 +280,7 @@ MOCK
 }
 
 @test "uninstall: retains dirty index-installed package directory" {
-  create_installed_package "alpha"
+  create_index_installed_package "alpha"
   touch "$SHIV_PACKAGES_DIR/alpha/uncommitted.txt"
 
   run run_uninstall "alpha" "true"
@@ -291,7 +291,7 @@ MOCK
 }
 
 @test "uninstall: --force removes dirty index-installed package directory" {
-  create_installed_package "alpha"
+  create_index_installed_package "alpha"
   touch "$SHIV_PACKAGES_DIR/alpha/uncommitted.txt"
 
   run_uninstall "alpha" "false" "true"
@@ -336,16 +336,9 @@ MOCK
 }
 
 @test "uninstall: retains local-path package directory" {
-  local repo_dir="$TEST_HOME/my-project"
-  mkdir -p "$repo_dir"
-  git -C "$repo_dir" init -q -b main
-  git -C "$repo_dir" config user.email "test@test.com"
-  git -C "$repo_dir" config user.name "Test"
-  touch "$repo_dir/README.md"
-  git -C "$repo_dir" add .
-  git -C "$repo_dir" commit -q -m "init"
-  shiv_register "myapp" "$repo_dir"
-  shiv_create_shim "myapp" "$repo_dir"
+  create_installed_package "myapp"
+  local repo_dir
+  repo_dir="$(shiv_registry_path myapp)"
 
   run run_uninstall "myapp" "true"
   [ "$status" -eq 0 ]

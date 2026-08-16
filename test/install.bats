@@ -21,12 +21,30 @@ setup() {
 
   mkdir -p "$SHIV_BIN_DIR" "$REMOTES_DIR"
   shiv_init_registry
+  export REAL_MISE="$(command -v mise)"
   setup_shiv_on_path
+  mock_dependency_mise
 
-  # Skip mise tasks --json in tests (hangs without trusted repo)
+  # Skip task-cache discovery unless a test exercises generated-shim runtime.
   export SHIV_SKIP_CACHE=1
 }
 
+
+# Most install tests claim Shiv behavior, not Mise's dependency installer.
+# Keep the outer public `shiv install` path real while replacing only the bare
+# trust/install subprocesses. Dedicated tests below overwrite this mock and
+# prove those calls and their environment explicitly.
+mock_dependency_mise() {
+  cat > "$BATS_TEST_TMPDIR/mock-bin/mise" <<MOCK
+#!/usr/bin/env bash
+case "\${1:-}" in
+  -C) exec "$REAL_MISE" "\$@" ;;
+  trust|install) exit 0 ;;
+  *) exec "$REAL_MISE" "\$@" ;;
+esac
+MOCK
+  chmod +x "$BATS_TEST_TMPDIR/mock-bin/mise"
+}
 
 # Helper: create a local repo to install from (simulates local path install)
 create_local_repo() {
@@ -46,7 +64,7 @@ create_local_repo() {
   git -C "$repo_dir" add .
   git -C "$repo_dir" commit -q -m "init"
 
-  # Pre-populate task cache (avoids mise trust/install in test)
+  # Pre-populate task cache so summary tests avoid task discovery.
   mkdir -p "$SHIV_CACHE_DIR/completions"
   printf 'hello\tSay hello\n' > "$SHIV_CACHE_DIR/completions/$name.cache"
 
@@ -123,15 +141,13 @@ run_install() {
 # Helper: record dependency-setup calls while delegating the outer shiv task
 # invocation to the real mise binary.
 record_dependency_mise_calls() {
-  local real_mise
-  real_mise="$(command -v mise)"
   export MISE_CALL_LOG="$TEST_HOME/mise-calls.log"
   export MISE_ENV_CALL_LOG="$TEST_HOME/mise-env-calls.log"
 
   cat > "$BATS_TEST_TMPDIR/mock-bin/mise" <<MOCK
 #!/usr/bin/env bash
 if [ "\${1:-}" = "-C" ] && [ "\${2:-}" = "$REPO_DIR" ]; then
-  exec "$real_mise" "\$@"
+  exec "$REAL_MISE" "\$@"
 fi
 printf '%s\t%s\n' "\$PWD" "\$*" >> "$MISE_CALL_LOG"
 printf '%s\t%s\t%s\n' "\$PWD" "\${MISE_OVERRIDE_CONFIG_FILENAMES-}" "\$*" >> "$MISE_ENV_CALL_LOG"
