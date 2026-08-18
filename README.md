@@ -31,8 +31,9 @@ shimmer --version
 # See what's installed
 shiv list
 
-# Update everything
+# Update package refs, then regenerate every clean registered shim
 shiv update
+shiv reshim
 
 # Check health
 shiv doctor
@@ -107,6 +108,8 @@ shiv install notes@abc1234 # pin an exact commit
 ```
 
 `shiv update` preserves that intent: release-channel installs advance to the newest release tag, branch installs pull their branch, and exact tag/commit pins stay fixed until you reinstall at another ref. Legacy installs without recorded intent are refused with guidance to choose `@latest` or `@main` explicitly.
+
+`shiv reshim` regenerates shims and caches for every clean registered package without moving its Git ref. Dirty, missing, or invalid registered worktrees are reported and make the command fail after safe packages finish; unregistered package directories are never scanned. After upgrading Shiv itself, run `shiv update shiv` followed by `shiv reshim` so every active package uses the new generator.
 
 You can also install directly from a local path:
 
