@@ -12,11 +12,11 @@ setup() {
 }
 
 create_stress_repo() {
-  local repo_dir="$1" marker="$2"
+  local repo_dir="$1" marker="$2" task_path="${3:-stress/write}"
 
-  mkdir -p "$repo_dir/.mise/tasks/stress"
+  mkdir -p "$(dirname "$repo_dir/.mise/tasks/$task_path")"
   printf '[tools]\n' > "$repo_dir/mise.toml"
-  cat > "$repo_dir/.mise/tasks/stress/write" <<TASK
+  cat > "$repo_dir/.mise/tasks/$task_path" <<TASK
 #!/usr/bin/env bash
 set -euo pipefail
 : "\${STRESS_OUTPUT:?STRESS_OUTPUT is required}"
@@ -24,7 +24,7 @@ mkdir -p "\$(dirname "\$STRESS_OUTPUT")"
 printf '%s\n' '$marker' > "\$STRESS_OUTPUT"
 printf 'STRESS_OK:%s\n' '$marker'
 TASK
-  chmod +x "$repo_dir/.mise/tasks/stress/write"
+  chmod +x "$repo_dir/.mise/tasks/$task_path"
   mise trust "$repo_dir/mise.toml" >/dev/null 2>&1
 }
 
@@ -227,8 +227,8 @@ assert_file_contents() {
   local runtime_map="$runtime_xdg/shiv/tasks/stress-tool"
   local override="$case_root/override.toml"
 
-  create_stress_repo "$first_repo" "version-one"
-  create_stress_repo "$second_repo" "version-two"
+  create_stress_repo "$first_repo" "version-one" "stress/version-one/write"
+  create_stress_repo "$second_repo" "version-two" "stress/version-two/write"
   create_conflicting_override "$override"
   generate_stress_shim "stress-tool" "$first_repo" "$first_bin" "$first_cache"
   generate_stress_shim "stress-tool" "$second_repo" "$second_bin" "$second_cache"
@@ -243,7 +243,7 @@ assert_file_contents() {
     env XDG_CACHE_HOME="$runtime_xdg" \
       MISE_OVERRIDE_CONFIG_FILENAMES="$override" \
       STRESS_OUTPUT="$first_output" \
-      "$first_shim" stress write
+      "$first_shim" stress version-one write
   [ ! -e "$second_output" ] || {
     report_stress_failure "version one wrote into version two's artifact root"
     return 1
@@ -255,15 +255,15 @@ assert_file_contents() {
     env XDG_CACHE_HOME="$runtime_xdg" \
       MISE_OVERRIDE_CONFIG_FILENAMES="$override" \
       STRESS_OUTPUT="$second_output" \
-      "$second_shim" stress write
+      "$second_shim" stress version-two write
 
   assert_file_contents "$first_output" "version-one" \
     "version two changed version one's output"
   assert_file_contents "$second_output" "version-two" \
     "version two wrote the wrong output"
-  assert_file_contents "$first_map" "stress write" \
+  assert_file_contents "$first_map" "stress version-one write" \
     "version one's task map changed"
-  assert_file_contents "$second_map" "stress write" \
+  assert_file_contents "$second_map" "stress version-two write" \
     "version two's task map changed"
   assert_file_contents "$runtime_map" "conflicting task" \
     "same-name versions changed the runtime XDG map"
