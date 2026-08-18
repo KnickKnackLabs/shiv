@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #MISE description="Pull latest and refresh shims — optionally for a single package"
-#USAGE arg "[name]" help="Package to update (default: all)"
+#USAGE arg "[name]" default="" help="Package to update (default: all)"
 set -euo pipefail
 
 source "$MISE_CONFIG_ROOT/lib/shim.sh"
