@@ -127,7 +127,7 @@ else
 
     if [ -f "$SHIV_BIN_DIR/$name" ]; then
       shim_repo=""
-      if ! shim_repo=$(grep '^REPO=' "$SHIV_BIN_DIR/$name" 2>/dev/null | cut -d'"' -f2); then
+      if ! shim_repo=$(shiv_read_generated_repo "$SHIV_BIN_DIR/$name"); then
         shim_repo=""
       fi
       if [ -n "$shim_repo" ] && [ "$shim_repo" != "$repo" ]; then

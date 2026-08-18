@@ -118,6 +118,13 @@ extract_column() {
   echo "$output" | grep -q "No tools registered"
 }
 
+@test "update: omitted package ignores ambient usage_name" {
+  run env usage_name="not-a-package" shiv update
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q "No tools registered"
+  ! echo "$output" | grep -q "Updating not-a-package"
+}
+
 @test "update: unknown package shows error" {
   run run_update "nonexistent"
   [ "$status" -ne 0 ]

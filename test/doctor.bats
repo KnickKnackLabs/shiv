@@ -105,6 +105,18 @@ run_doctor() {
   echo "$output" | grep "alpha" | grep -q "✓"
 }
 
+@test "doctor: generated shim with shell-active literal path is healthy" {
+  local repo_dir="$TEST_HOME/repos/path with apostrophe' and \$cash and \`tick\` and \"quote\" and \\slash/alpha"
+  mkdir -p "$repo_dir"
+  git -C "$repo_dir" init -q -b main
+  shiv_register "alpha" "$repo_dir"
+  shiv_create_shim "alpha" "$repo_dir"
+
+  run run_doctor
+  [ "$status" -eq 0 ]
+  echo "$output" | grep "alpha" | grep -q "✓"
+}
+
 @test "doctor: multiple healthy packages all show ✓" {
   create_installed_package "alpha"
   create_installed_package "bravo"

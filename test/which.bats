@@ -107,6 +107,22 @@ run_which_from() {
   [ "$output" = "$mise_repo" ]
 }
 
+@test "which: current mise-scoped shim decodes shell-active literal path" {
+  local caller_dir="$TEST_HOME/project"
+  local mise_repo="$TEST_HOME/path with apostrophe' and \$cash and \`tick\` and \"quote\" and \\slash/alpha"
+  local mise_executable="$TEST_HOME/mise-bin/alpha"
+
+  SHIV_BIN_DIR="$(dirname "$mise_executable")" shiv_create_shim "alpha" "$mise_repo"
+
+  export FAKE_MISE_CWD="$caller_dir"
+  export FAKE_MISE_NAME="alpha"
+  export FAKE_MISE_PATH="$mise_executable"
+
+  run run_which_from "$caller_dir" "alpha"
+  [ "$status" -eq 0 ]
+  [ "$output" = "$mise_repo" ]
+}
+
 @test "which: current mise-scoped shiv package resolves without global registry entry" {
   local caller_dir="$TEST_HOME/project"
   local mise_repo="$TEST_HOME/.local/share/mise/installs/shiv-bravo/2.0.0/packages/bravo"

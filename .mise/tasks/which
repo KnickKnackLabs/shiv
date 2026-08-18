@@ -23,8 +23,7 @@ mise_scoped_package_path() {
   [ -f "$executable" ] || return 1
   grep -q "# managed by shiv" "$executable" 2>/dev/null || return 1
 
-  package_root=$(sed -n 's/^REPO="\([^"]*\)".*/\1/p' "$executable" | head -1)
-  [ -n "$package_root" ] || return 1
+  package_root=$(shiv_read_generated_repo "$executable") || return 1
 
   echo "$package_root"
 }

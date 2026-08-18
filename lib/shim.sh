@@ -30,8 +30,9 @@ shiv_caller_pwd_var_name() {
 shiv_create_shim() {
   local name="$1" repo_dir="$2"
   local default_task=""
-  local caller_pwd_var task_map_quoted
+  local caller_pwd_var repo_escaped task_map_quoted
   caller_pwd_var=$(shiv_caller_pwd_var_name "$name")
+  repo_escaped=$(shiv_double_quote_escape "$repo_dir")
   task_map_quoted=$(shiv_shell_quote "$SHIV_CACHE_DIR/tasks/$name")
 
   # At install time, detect a default task for single-command tools.
@@ -68,7 +69,7 @@ shiv_create_shim() {
   cat > "$SHIV_BIN_DIR/$name" <<SCRIPT
 #!/usr/bin/env bash
 # managed by shiv
-REPO="$repo_dir"
+REPO="$repo_escaped"
 DEFAULT_TASK="${default_task}"
 HAS_TASKS_TASK="${has_tasks_task}"
 HAS_HELP_TASK="${has_help_task}"
@@ -83,9 +84,9 @@ _shiv_check_repo() {
 }
 
 _shiv_check_cwd() {
-  if [ "\$(basename "\$PWD")" = "$name" ] && [ "\$PWD" != "$repo_dir" ]; then
+  if [ "\$(basename "\$PWD")" = "$name" ] && [ "\$PWD" != "\$REPO" ]; then
     echo "$name: warning: you're in a directory called '$name' but running the shiv-installed copy" >&2
-    echo "$name: shiv package: $repo_dir" >&2
+    echo "$name: shiv package: \$REPO" >&2
     echo "$name: current dir: \$PWD" >&2
     echo "$name: to run from this directory instead: mise run \$*" >&2
     echo "" >&2
@@ -380,6 +381,43 @@ shiv_refresh_package() {
   if [ "${#aliases[@]}" -gt 0 ]; then
     shiv_create_alias_symlinks "$name" "${aliases[@]}" || return 1
   fi
+}
+
+# Escape shell-active content for a generated double-quoted value.
+shiv_double_quote_escape() {
+  local value="$1"
+  value=${value//\\/\\\\}
+  value=${value//\"/\\\"}
+  value=${value//\$/\\\$}
+  value=${value//\`/\\\`}
+  printf '%s' "$value"
+}
+
+# Read REPO from a generated shim without evaluating its shell source.
+shiv_read_generated_repo() {
+  local shim="$1" value result="" char next
+  value=$(sed -n 's/^REPO="\(.*\)"$/\1/p' "$shim")
+  [ -n "$value" ] || return 1
+
+  while [ -n "$value" ]; do
+    char=${value%"${value#?}"}
+    value=${value#?}
+
+    if [ "$char" != "\\" ]; then
+      result="${result}${char}"
+      continue
+    fi
+
+    [ -n "$value" ] || return 1
+    next=${value%"${value#?}"}
+    value=${value#?}
+    case "$next" in
+      \\|'"'|'$'|'`') result="${result}${next}" ;;
+      *) result="${result}\\${next}" ;;
+    esac
+  done
+
+  printf '%s\n' "$result"
 }
 
 # Quote a value for POSIX-ish shell eval output.
