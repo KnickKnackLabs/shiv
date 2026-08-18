@@ -393,6 +393,33 @@ shiv_double_quote_escape() {
   printf '%s' "$value"
 }
 
+# Read REPO from a generated shim without evaluating its shell source.
+shiv_read_generated_repo() {
+  local shim="$1" value result="" char next
+  value=$(sed -n 's/^REPO="\(.*\)"$/\1/p' "$shim")
+  [ -n "$value" ] || return 1
+
+  while [ -n "$value" ]; do
+    char=${value%"${value#?}"}
+    value=${value#?}
+
+    if [ "$char" != "\\" ]; then
+      result="${result}${char}"
+      continue
+    fi
+
+    [ -n "$value" ] || return 1
+    next=${value%"${value#?}"}
+    value=${value#?}
+    case "$next" in
+      \\|'"'|'$'|'`') result="${result}${next}" ;;
+      *) result="${result}\\${next}" ;;
+    esac
+  done
+
+  printf '%s\n' "$result"
+}
+
 # Quote a value for POSIX-ish shell eval output.
 shiv_shell_quote() {
   printf "'"
