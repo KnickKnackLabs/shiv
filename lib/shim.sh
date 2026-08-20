@@ -15,6 +15,115 @@ SHIV_BIN_DIR="${SHIV_BIN_DIR:-$HOME/.local/bin}"
 SHIV_DATA_DIR="${SHIV_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/shiv}"
 SHIV_PACKAGES_DIR="${SHIV_PACKAGES_DIR:-$SHIV_DATA_DIR/packages}"
 
+shiv_canonical_package_path() {
+  local package_root="$1"
+
+  if [ -d "$package_root" ]; then
+    (cd "$package_root" && pwd -P)
+  else
+    printf '%s\n' "$package_root"
+  fi
+}
+
+shiv_mise_scoped_package_path() {
+  local name="$1"
+  local caller_dir="$2"
+  local mise_bin="${MISE_BIN:-mise}"
+  local executable package_root
+
+  if ! executable=$("$mise_bin" -C "$caller_dir" which "$name" 2>/dev/null); then
+    return 1
+  fi
+
+  [ -f "$executable" ] || return 1
+  grep -q "# managed by shiv" "$executable" 2>/dev/null || return 1
+
+  package_root=$(shiv_read_generated_repo "$executable") || return 1
+  printf '%s\n' "$package_root"
+}
+
+shiv_global_package_path() {
+  local name="$1"
+  local package_root resolved
+
+  package_root=$(shiv_registry_path "$name")
+  if [ -z "$package_root" ]; then
+    resolved=$(shiv_registry_resolve "$name")
+    if [ -n "$resolved" ]; then
+      package_root=$(shiv_registry_path "$resolved")
+    fi
+  fi
+
+  [ -n "$package_root" ] || return 1
+  printf '%s\n' "$package_root"
+}
+
+shiv_active_mise_package_names() {
+  local caller_dir="$1"
+  local mise_bin="${MISE_BIN:-mise}"
+  local tools_json active_names
+
+  if ! tools_json=$("$mise_bin" -C "$caller_dir" ls --json 2>/dev/null); then
+    echo "shiv: failed to inspect active mise tools from $caller_dir" >&2
+    return 1
+  fi
+
+  if ! active_names=$(printf '%s\n' "$tools_json" | jq -r '
+    to_entries[]
+    | select(.key | startswith("shiv:"))
+    | select(any(.value[]?; .active == true))
+    | .key | sub("^shiv:"; "")
+  '); then
+    echo "shiv: mise returned invalid tool inventory for $caller_dir" >&2
+    return 1
+  fi
+
+  printf '%s\n' "$active_names"
+}
+
+shiv_assert_active_package_matches_registry() {
+  local name="$1"
+  local registry_root="$2"
+  local caller_dir="$3"
+  local require_active="${4:-false}"
+  local active_root active_canonical registry_canonical
+
+  if ! active_root=$(shiv_mise_scoped_package_path "$name" "$caller_dir"); then
+    if [ "$require_active" = "true" ]; then
+      echo "shiv: failed to resolve active mise package 'shiv:$name' from $caller_dir" >&2
+      return 1
+    fi
+    return 0
+  fi
+
+  active_canonical=$(shiv_canonical_package_path "$active_root")
+  registry_canonical=$(shiv_canonical_package_path "$registry_root")
+  [ "$active_canonical" = "$registry_canonical" ] && return 0
+
+  cat >&2 <<EOF
+shiv: active mise package root differs from the global registry for '$name'
+  active mise root:    $active_canonical
+  global registry root: $registry_canonical
+  caller:              $caller_dir
+Refusing to inspect or modify the registry package while this codebase executes a different checkout.
+Use mise to refresh the active 'shiv:$name' tool, or run from a directory where it is not active.
+EOF
+  return 1
+}
+
+shiv_assert_active_packages_match_registry() {
+  local caller_dir="$1"
+  local active_names name registry_root
+
+  active_names=$(shiv_active_mise_package_names "$caller_dir") || return 1
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    if registry_root=$(shiv_global_package_path "$name"); then
+      shiv_assert_active_package_matches_registry "$name" "$registry_root" "$caller_dir" true || return 1
+    fi
+  done <<< "$active_names"
+}
+
 # Create a shim for a tool
 shiv_caller_pwd_var_name() {
   local name="$1"

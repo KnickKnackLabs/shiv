@@ -180,6 +180,15 @@ shiv install notes@abc1234 # pin an exact commit`}</CodeBlock>
       </Paragraph>
 
       <Paragraph>
+        When the caller&apos;s mise context resolves a package name to a different
+        Shiv checkout than the global registry, <Code>shiv update</Code> and{" "}
+        <Code>shiv list</Code> refuse and show both roots instead of reporting
+        registry state as if it described the executable package. Refresh the
+        active <Code>shiv:&lt;name&gt;</Code> tool through mise, or run the command
+        from a directory where that tool is not active.
+      </Paragraph>
+
+      <Paragraph>
         <Code>shiv reshim</Code> regenerates shims and caches for every clean
         registered package without moving its Git ref. Dirty, missing, or invalid
         registered worktrees are reported and make the command fail after safe
