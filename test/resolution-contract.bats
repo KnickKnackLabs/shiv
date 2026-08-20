@@ -115,7 +115,7 @@ create_registry_package_before_conflict() {
   git clone -q "$bare_repo" "$BETA_REPO"
 
   SHIV_REF=main SHIV_REF_MODE=branch shiv_register "beta" "$BETA_REPO"
-  SHIV_REF=main SHIV_REF_MODE=branch shiv_register "alpha" "$GLOBAL_REPO"
+  SHIV_REF=main SHIV_REF_MODE=branch shiv_register "alpha" "$GLOBAL_REPO" "a"
 
   printf 'upstream\n' >> "$seed_repo/README.md"
   git -C "$seed_repo" add README.md
@@ -160,6 +160,15 @@ run_shiv_from_caller() {
   [ "$(git -C "$GLOBAL_REPO" rev-parse HEAD)" = "$global_before" ]
   [ "$(git -C "$MISE_REPO" rev-parse HEAD)" = "$mise_before" ]
 
+  run run_shiv_from_caller update a
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"active mise package root differs from the global registry"* ]]
+  [[ "$output" == *"$active_canonical"* ]]
+  [[ "$output" == *"$global_canonical"* ]]
+  [[ "$output" != *"✓ alpha"* ]]
+  [ "$(git -C "$GLOBAL_REPO" rev-parse HEAD)" = "$global_before" ]
+  [ "$(git -C "$MISE_REPO" rev-parse HEAD)" = "$mise_before" ]
+
   run run_shiv_from_caller list
   [ "$status" -eq 1 ]
   [[ "$output" == *"active mise package root differs from the global registry"* ]]
@@ -189,6 +198,12 @@ run_shiv_from_caller() {
   export FAKE_MISE_LS_MODE=ok
   export FAKE_MISE_WHICH_MODE=fail
   run run_shiv_from_caller update
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"failed to resolve active mise package 'shiv:alpha'"* ]]
+  [[ "$output" != *"✓ alpha"* ]]
+  [ "$(git -C "$GLOBAL_REPO" rev-parse HEAD)" = "$global_before" ]
+
+  run run_shiv_from_caller update alpha
   [ "$status" -eq 1 ]
   [[ "$output" == *"failed to resolve active mise package 'shiv:alpha'"* ]]
   [[ "$output" != *"✓ alpha"* ]]
