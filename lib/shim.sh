@@ -124,6 +124,21 @@ shiv_assert_active_packages_match_registry() {
   done <<< "$active_names"
 }
 
+shiv_assert_active_registry_package_matches() {
+  local registry_name="$1"
+  local registry_root="$2"
+  local caller_dir="$3"
+  local active_names active_name resolved
+
+  active_names=$(shiv_active_mise_package_names "$caller_dir") || return 1
+  while IFS= read -r active_name; do
+    [ -n "$active_name" ] || continue
+    resolved=$(shiv_registry_resolve "$active_name")
+    [ "$resolved" = "$registry_name" ] || continue
+    shiv_assert_active_package_matches_registry "$active_name" "$registry_root" "$caller_dir" true || return 1
+  done <<< "$active_names"
+}
+
 # Create a shim for a tool
 shiv_caller_pwd_var_name() {
   local name="$1"
