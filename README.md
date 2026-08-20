@@ -8,7 +8,7 @@
 
 ![shell: bash](https://img.shields.io/badge/shell-bash-4EAA25?style=flat&logo=gnubash&logoColor=white)
 [![runtime: mise](https://img.shields.io/badge/runtime-mise-7c3aed?style=flat)](https://mise.jdx.dev)
-![tests: 303 passing](https://img.shields.io/badge/tests-303%20passing-brightgreen?style=flat)
+![tests: 313 passing](https://img.shields.io/badge/tests-313%20passing-brightgreen?style=flat)
 ![packages: 49](https://img.shields.io/badge/packages-49-blue?style=flat)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat)](LICENSE)
 
@@ -109,6 +109,8 @@ shiv install notes@abc1234 # pin an exact commit
 
 `shiv update` preserves that intent: release-channel installs advance to the newest release tag, branch installs pull their branch, and exact tag/commit pins stay fixed until you reinstall at another ref. Legacy installs without recorded intent are refused with guidance to choose `@latest` or `@main` explicitly.
 
+When the caller's mise context resolves a package name to a different Shiv checkout than the global registry, `shiv update` and `shiv list` refuse and show both roots instead of reporting registry state as if it described the executable package. Refresh the active `shiv:<name>` tool through mise, or run the command from a directory where that tool is not active.
+
 `shiv reshim` regenerates shims and caches for every clean registered package without moving its Git ref. Dirty, missing, or invalid registered worktrees are reported and make the command fail after safe packages finish; unregistered package directories are never scanned. After upgrading Shiv itself, run `shiv update shiv` followed by `shiv reshim` so every active package uses the new generator.
 
 You can also install directly from a local path:
@@ -154,7 +156,7 @@ cd shiv && mise trust && mise install
 mise run test
 ```
 
-Tests use the [KKL-maintained BATS fork](https://github.com/KnickKnackLabs/bats-core) with Rush. The measured eight-job default schedules isolated tests across and within files, covering 303 tests across 15 suites. Use `mise run test --jobs 1` for serial debugging. Completion tests run separately.
+Tests use the [KKL-maintained BATS fork](https://github.com/KnickKnackLabs/bats-core) with Rush. The measured eight-job default schedules isolated tests across and within files, covering 313 tests across 17 suites. Use `mise run test --jobs 1` for serial debugging. Completion tests run separately.
 
 <div align="center">
 

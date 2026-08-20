@@ -9,12 +9,15 @@ source "$MISE_CONFIG_ROOT/lib/shim.sh"
 
 shiv_init_registry
 
+CALLER_DIR="${SHIV_CALLER_PWD:-${CALLER_PWD:-${MISE_ORIGINAL_CWD:-$PWD}}}"
 COUNT=$(jq 'length' "$SHIV_REGISTRY")
 
 if [ "$COUNT" -eq 0 ]; then
   echo "No tools registered. Use 'shiv install <name> <path>' to add one."
   exit 0
 fi
+
+shiv_assert_active_packages_match_registry "$CALLER_DIR"
 
 SORT_FIELD="${usage_sort:-name}"
 SORT_DESC="${usage_desc:-false}"

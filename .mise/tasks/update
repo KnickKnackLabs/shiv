@@ -8,6 +8,7 @@ source "$MISE_CONFIG_ROOT/lib/shim.sh"
 shiv_init_registry
 
 TARGET="${usage_name:-}"
+CALLER_DIR="${SHIV_CALLER_PWD:-${CALLER_PWD:-${MISE_ORIGINAL_CWD:-$PWD}}}"
 SEP='|'
 
 # Collect results for summary table.
@@ -162,9 +163,14 @@ update_release() {
   fi
 }
 
+preflight_all_package_roots() {
+  shiv_assert_active_packages_match_registry "$CALLER_DIR"
+}
+
 # Update a single package, appending result to RESULTS array.
 update_one() {
   local name="$1"
+  local preflight_root="${2:-true}"
   local repo resolved mode ref branch version reason
 
   repo=$(shiv_registry_path "$name")
@@ -181,6 +187,12 @@ update_one() {
   if [ -z "$repo" ]; then
     add_result "$name" "-" "-" "✗" "not a registered package or alias"
     echo "  ✗ $name — not a registered package or alias"
+    return 1
+  fi
+
+  if [ "$preflight_root" = "true" ] \
+    && ! shiv_assert_active_registry_package_matches "$name" "$repo" "$CALLER_DIR"; then
+    add_result "$name" "-" "-" "✗" "active mise package root differs from global registry"
     return 1
   fi
 
@@ -242,11 +254,13 @@ else
     echo "No tools registered."
     exit 0
   fi
+  preflight_all_package_roots
+
   echo "Updating $COUNT tool(s)..."
   echo ""
   rc=0
   while IFS=$'\t' read -r name _repo _ref; do
-    update_one "$name" || rc=1
+    update_one "$name" false || rc=1
   done < <(shiv_registry_entries)
 fi
 
