@@ -32,7 +32,7 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install mise
         run: |
@@ -48,4 +48,4 @@ jobs:
         run: mise run test
 
       - name: Run Codebase lints
-        run: codebase lint "$PWD"
+        run: mise exec -- codebase lint "$PWD"
