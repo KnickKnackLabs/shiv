@@ -46,3 +46,6 @@ jobs:
 
       - name: Run tests
         run: mise run test
+
+      - name: Run Codebase lints
+        run: codebase lint "$PWD"

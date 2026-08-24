@@ -1,6 +1,8 @@
 #!/usr/bin/env bats
 # shiv shell completions test suite
 
+load helpers
+
 REPO_DIR="$BATS_TEST_DIRNAME/.."
 
 setup() {
@@ -9,6 +11,7 @@ setup() {
   # Use a temporary home for isolation
   export TEST_HOME="$BATS_TEST_TMPDIR/shiv"
   mkdir -p "$TEST_HOME"
+  setup_shiv_on_path
 
   # Override shiv paths to use test home
   export SHIV_BIN_DIR="$TEST_HOME/.local/bin"
@@ -123,21 +126,21 @@ TOML
 
 @test "bash: output contains complete -F for registered tool" {
   shiv_cache_tasks "shiv" "$REPO_DIR"
-  run mise -C "$REPO_DIR" run -q completions:bash
+  run shiv completions:bash
   [ "$status" -eq 0 ]
   echo "$output" | grep -q "complete -F _shiv_complete_shiv shiv"
 }
 
 @test "bash: output contains __shiv_rebuild_cache helper" {
   shiv_cache_tasks "shiv" "$REPO_DIR"
-  run mise -C "$REPO_DIR" run -q completions:bash
+  run shiv completions:bash
   [ "$status" -eq 0 ]
   echo "$output" | grep -q "__shiv_rebuild_cache()"
 }
 
 @test "bash: completions function works" {
   shiv_cache_tasks "shiv" "$REPO_DIR"
-  eval "$(mise -C "$REPO_DIR" run -q completions:bash)"
+  eval "$(shiv completions:bash)"
   COMP_WORDS=(shiv "")
   COMP_CWORD=1
   _shiv_complete_shiv
@@ -148,7 +151,7 @@ TOML
 
 @test "bash: completions filter by prefix" {
   shiv_cache_tasks "shiv" "$REPO_DIR"
-  eval "$(mise -C "$REPO_DIR" run -q completions:bash)"
+  eval "$(shiv completions:bash)"
   COMP_WORDS=(shiv "in")
   COMP_CWORD=1
   _shiv_complete_shiv
@@ -161,7 +164,7 @@ TOML
   # Use truncate (empty file) rather than delete, to test the -s (non-empty) check
   shiv_cache_tasks "shiv" "$REPO_DIR"
   : > "$SHIV_CACHE_DIR/completions/shiv.cache"
-  eval "$(mise -C "$REPO_DIR" run -q completions:bash)"
+  eval "$(shiv completions:bash)"
   COMP_WORDS=(shiv "")
   COMP_CWORD=1
   _shiv_complete_shiv
@@ -175,7 +178,7 @@ TOML
   shiv_register "bravo" "$REPO_DIR"
   shiv_cache_tasks "shiv" "$REPO_DIR"
 
-  eval "$(mise -C "$REPO_DIR" run -q completions:bash)"
+  eval "$(shiv completions:bash)"
   COMP_WORDS=(shiv which "")
   COMP_CWORD=2
   COMPREPLY=()
@@ -191,7 +194,7 @@ TOML
   shiv_register "bravo" "$REPO_DIR"
   shiv_cache_tasks "shiv" "$REPO_DIR"
 
-  eval "$(mise -C "$REPO_DIR" run -q completions:bash)"
+  eval "$(shiv completions:bash)"
   COMP_WORDS=(shiv update "a")
   COMP_CWORD=2
   COMPREPLY=()
@@ -205,7 +208,7 @@ TOML
   shiv_register "alpha" "$REPO_DIR" "a-tool"
   shiv_cache_tasks "shiv" "$REPO_DIR"
 
-  eval "$(mise -C "$REPO_DIR" run -q completions:bash)"
+  eval "$(shiv completions:bash)"
   COMP_WORDS=(shiv update "")
   COMP_CWORD=2
   COMPREPLY=()
@@ -220,7 +223,7 @@ TOML
   shiv_register "bravo" "$REPO_DIR"
   shiv_cache_tasks "shiv" "$REPO_DIR"
 
-  eval "$(mise -C "$REPO_DIR" run -q completions:bash)"
+  eval "$(shiv completions:bash)"
   COMP_WORDS=(shiv update "a")
   COMP_CWORD=2
   COMPREPLY=()
@@ -239,7 +242,7 @@ JSON
   shiv_register "zebra-test" "$REPO_DIR"
   shiv_cache_tasks "shiv" "$REPO_DIR"
 
-  eval "$(mise -C "$REPO_DIR" run -q completions:bash)"
+  eval "$(shiv completions:bash)"
   COMP_WORDS=(shiv install "")
   COMP_CWORD=2
   COMPREPLY=()
@@ -255,21 +258,21 @@ JSON
 
 @test "zsh: output contains compdef for registered tool" {
   shiv_cache_tasks "shiv" "$REPO_DIR"
-  run mise -C "$REPO_DIR" run -q completions:zsh
+  run shiv completions:zsh
   [ "$status" -eq 0 ]
   echo "$output" | grep -q "compdef _shiv_complete_shiv shiv"
 }
 
 @test "zsh: output contains _describe call" {
   shiv_cache_tasks "shiv" "$REPO_DIR"
-  run mise -C "$REPO_DIR" run -q completions:zsh
+  run shiv completions:zsh
   [ "$status" -eq 0 ]
   echo "$output" | grep -q "_describe"
 }
 
 @test "zsh: output escapes colons in task names" {
   shiv_cache_tasks "shiv" "$REPO_DIR"
-  run mise -C "$REPO_DIR" run -q completions:zsh
+  run shiv completions:zsh
   [ "$status" -eq 0 ]
   # The escaping logic should be present
   echo "$output" | grep -qF 'task//:/\\:'
@@ -277,7 +280,7 @@ JSON
 
 @test "zsh: shiv command completion has package subcommand branches" {
   shiv_cache_tasks "shiv" "$REPO_DIR"
-  run mise -C "$REPO_DIR" run -q completions:zsh
+  run shiv completions:zsh
   [ "$status" -eq 0 ]
   echo "$output" | grep -q "__shiv_installed_packages"
   echo "$output" | grep -q "__shiv_source_packages"
@@ -289,7 +292,7 @@ JSON
     skip "zsh not found"
   fi
   shiv_cache_tasks "shiv" "$REPO_DIR"
-  mise -C "$REPO_DIR" run -q completions:zsh > "$BATS_TEST_TMPDIR/comp.zsh"
+  shiv completions:zsh > "$BATS_TEST_TMPDIR/comp.zsh"
   run zsh -n "$BATS_TEST_TMPDIR/comp.zsh"
   [ "$status" -eq 0 ]
 }
@@ -300,21 +303,21 @@ JSON
 
 @test "fish: output contains complete -c for registered tool" {
   shiv_cache_tasks "shiv" "$REPO_DIR"
-  run mise -C "$REPO_DIR" run -q completions:fish
+  run shiv completions:fish
   [ "$status" -eq 0 ]
   echo "$output" | grep -q "complete -c shiv"
 }
 
 @test "fish: output contains __shiv_rebuild_cache helper" {
   shiv_cache_tasks "shiv" "$REPO_DIR"
-  run mise -C "$REPO_DIR" run -q completions:fish
+  run shiv completions:fish
   [ "$status" -eq 0 ]
   echo "$output" | grep -q "__shiv_rebuild_cache"
 }
 
 @test "fish: shiv command completion has package subcommand branches" {
   shiv_cache_tasks "shiv" "$REPO_DIR"
-  run mise -C "$REPO_DIR" run -q completions:fish
+  run shiv completions:fish
   [ "$status" -eq 0 ]
   echo "$output" | grep -q "__shiv_installed_packages"
   echo "$output" | grep -q "__shiv_source_packages"
@@ -326,7 +329,7 @@ JSON
     skip "fish not found"
   fi
   shiv_cache_tasks "shiv" "$REPO_DIR"
-  mise -C "$REPO_DIR" run -q completions:fish > "$BATS_TEST_TMPDIR/comp.fish"
+  shiv completions:fish > "$BATS_TEST_TMPDIR/comp.fish"
   run fish -n "$BATS_TEST_TMPDIR/comp.fish"
   [ "$status" -eq 0 ]
 }
@@ -337,20 +340,20 @@ JSON
 
 @test "default: auto-detects bash" {
   shiv_cache_tasks "shiv" "$REPO_DIR"
-  SHELL=/bin/bash run mise -C "$REPO_DIR" run -q completions
+  SHELL=/bin/bash run shiv completions
   [ "$status" -eq 0 ]
   echo "$output" | grep -q "complete -F"
 }
 
 @test "default: auto-detects zsh" {
   shiv_cache_tasks "shiv" "$REPO_DIR"
-  SHELL=/bin/zsh run mise -C "$REPO_DIR" run -q completions
+  SHELL=/bin/zsh run shiv completions
   [ "$status" -eq 0 ]
   echo "$output" | grep -q "compdef"
 }
 
 @test "default: rejects unsupported shell" {
-  SHELL=/bin/csh run mise -C "$REPO_DIR" run -q completions
+  SHELL=/bin/csh run shiv completions
   [ "$status" -ne 0 ]
 }
 
@@ -364,7 +367,7 @@ JSON
   shiv_cache_tasks "shiv" "$REPO_DIR"
   shiv_cache_tasks "faketool" "$REPO_DIR"
 
-  run mise -C "$REPO_DIR" run -q completions:bash
+  run shiv completions:bash
   [ "$status" -eq 0 ]
   echo "$output" | grep -q "complete -F _shiv_complete_shiv shiv"
   echo "$output" | grep -q "complete -F _shiv_complete_faketool faketool"

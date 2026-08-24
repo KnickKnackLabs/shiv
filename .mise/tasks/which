@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 #MISE description="Print the install path of a managed tool"
 #USAGE arg "<name>" help="Package name or alias to look up"
+#USAGE example "shiv which shimmer" header="Print a package checkout path"
 set -euo pipefail
 
 source "$MISE_CONFIG_ROOT/lib/shim.sh"

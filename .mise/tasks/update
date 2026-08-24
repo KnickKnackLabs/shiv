@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 #MISE description="Pull latest and refresh shims — optionally for a single package"
 #USAGE arg "[name]" default="" help="Package to update (default: all)"
+#USAGE example "shiv update" header="Update every eligible package"
+#USAGE example "shiv update shimmer" header="Update one package"
 set -euo pipefail
 
 source "$MISE_CONFIG_ROOT/lib/shim.sh"
@@ -266,5 +268,5 @@ fi
 
 # Summary table (multi-package updates only)
 echo ""
-printf '%s\n' "${RESULTS[@]}" | gum table -s "$SEP" -c "PACKAGE,BRANCH,VERSION,STATUS,DETAIL" -p --border normal
+printf '%s\n' ${RESULTS[@]+"${RESULTS[@]}"} | gum table -s "$SEP" -c "PACKAGE,BRANCH,VERSION,STATUS,DETAIL" -p --border normal
 exit "$rc"

@@ -80,7 +80,7 @@ while IFS=$'\t' read -r name repo _ref; do
 done < "$ENTRIES_FILE"
 
 echo ""
-printf '%s\n' "${RESULTS[@]}" \
+printf '%s\n' ${RESULTS[@]+"${RESULTS[@]}"} \
   | gum table -s "$SEP" -c "PACKAGE,STATUS,DETAIL" -p --border normal
 
 exit "$rc"

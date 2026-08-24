@@ -3,6 +3,8 @@
 #USAGE flag "--sort <field>" help="Sort by: name (default), updated"
 #USAGE flag "--desc" help="Sort descending (default for updated)"
 #USAGE flag "--asc" help="Sort ascending (default for name)"
+#USAGE example "shiv list" header="List packages by name"
+#USAGE example "shiv list --sort updated --desc" header="Show recently updated packages first"
 set -eo pipefail
 
 source "$MISE_CONFIG_ROOT/lib/shim.sh"
