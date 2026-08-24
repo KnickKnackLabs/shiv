@@ -164,7 +164,7 @@ run_cached_sucker() {
     return 1
   fi
 
-  export SUCKER_CALLER_PWD="$caller_dir"
+  export SUCKER_CALLER_PWD="$caller_dir" # codebase:ignore caller-pwd-contract — public child-script caller contract
   export SUCKER_SOURCE_URL="$URL"
   export SUCKER_CACHE_PATH="$script"
 

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 #MISE description="Check for newer versions of installed packages"
 #USAGE arg "[names...]" help="Packages to check (default: all)"
+#USAGE example "shiv outdated" header="Check every installed package"
+#USAGE example "shiv outdated shimmer notes" header="Check selected packages"
 set -eo pipefail
 
 source "$MISE_CONFIG_ROOT/lib/shim.sh"
@@ -12,7 +14,9 @@ NAMES=()
 
 # Parse positional args
 if [ -n "${usage_names:-}" ]; then
-  IFS=' ' read -ra NAMES <<< "$usage_names"
+  while IFS= read -r name; do
+    [ -z "$name" ] || NAMES+=("$name")
+  done < <(printf '%s' "$usage_names" | xargs printf '%s\n')
 fi
 
 # If no args, check all registered packages

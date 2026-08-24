@@ -8,7 +8,7 @@ aqua.registries = ["https://github.com/KnickKnackLabs/bats-core"]
 shiv = "https://github.com/KnickKnackLabs/vfox-shiv"
 
 [tools]
-"shiv:codebase" = "0.3"
+"shiv:codebase" = "0.4"
 "shiv:readme" = "latest"
 "aqua:KnickKnackLabs/bats-core" = "1.14.0-kkl.1"
 gum = "0.17.0"
@@ -17,14 +17,8 @@ jsonschema = "14.14.2"
 "aqua:shenwei356/rush" = "0.9.0"
 
 [_.codebase]
-lint = [
-  "mise-settings",
-  "bats-test-helper",
-  "mcr-scope",
-  "or-true",
-  "shellcheck",
-  "gum-table",
-]
+name = "shiv"
+lint = ["@all"]
 
 [_.codebase.scope]
 gum-table = ".mise/tasks"
