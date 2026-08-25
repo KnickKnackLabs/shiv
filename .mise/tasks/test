@@ -81,6 +81,10 @@ resolve_arguments() {
     fi
 
     case "$argument" in
+      --no-parallelize-across-files)
+        resolved_arguments+=("$argument")
+        explicit_no_across=true
+        ;;
       -*) resolved_arguments+=("$argument") ;;
       *) append_test_target "$argument" ;;
     esac
@@ -131,6 +135,31 @@ select_parallelism() {
   fi
 }
 
+contains_whitespace() {
+  case "$1" in
+    *[[:space:]]*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+explicit_no_across=false
+
+apply_parallel_transport_fallback() {
+  local argument
+  [ "$effective_jobs" -gt 1 ] || return 0
+  $explicit_no_across && return 0
+  if contains_whitespace "$MISE_CONFIG_ROOT"; then
+    resolved_arguments=(--no-parallelize-across-files ${resolved_arguments[@]+"${resolved_arguments[@]}"})
+    return 0
+  fi
+  for argument in ${resolved_arguments[@]+"${resolved_arguments[@]}"}; do
+    if contains_whitespace "$argument"; then
+      resolved_arguments=(--no-parallelize-across-files ${resolved_arguments[@]+"${resolved_arguments[@]}"})
+      return 0
+    fi
+  done
+}
+
 require_commands() {
   if ! command_available "$bats_command"; then
     printf "Error: BATS executable '%s' is unavailable; run 'mise install'.\n" \
@@ -174,5 +203,6 @@ fi
 resolve_arguments ${arguments[@]+"${arguments[@]}"}
 append_default_targets
 select_parallelism
+apply_parallel_transport_fallback
 require_commands
 run_bats
