@@ -10,7 +10,7 @@ shiv = "https://github.com/KnickKnackLabs/vfox-shiv"
 [tools]
 "shiv:codebase" = "0.4"
 "shiv:readme" = "latest"
-"aqua:KnickKnackLabs/bats-core" = "1.14.0-kkl.1"
+"aqua:KnickKnackLabs/bats-core" = "1.14.0-kkl.3"
 gum = "0.17.0"
 uv = "0.11.15"
 jsonschema = "14.14.2"
