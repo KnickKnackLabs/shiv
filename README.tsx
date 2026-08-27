@@ -22,8 +22,7 @@ const packageCount = Object.keys(packages).length;
 
 // Count test files and test cases
 const testDir = join(REPO_DIR, "test");
-const testFiles = readdirSync(testDir).filter((f) => f.endsWith(".bats"));
-const defaultTestFiles = testFiles.filter((f) => f !== "completions.bats");
+const defaultTestFiles = readdirSync(testDir).filter((f) => f.endsWith(".bats"));
 const testCount = defaultTestFiles.reduce((sum, f) => {
   const content = readFileSync(join(testDir, f), "utf-8");
   return sum + (content.match(/@test /g)?.length ?? 0);

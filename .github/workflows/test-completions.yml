@@ -5,13 +5,13 @@ on:
     paths:
       - lib/shim.sh
       - .mise/tasks/completions/**
-      - test/completions.bats
+      - test-completions.bats
   push:
     branches: [main]
     paths:
       - lib/shim.sh
       - .mise/tasks/completions/**
-      - test/completions.bats
+      - test-completions.bats
   workflow_dispatch:
 
 env:
@@ -43,4 +43,4 @@ jobs:
           fi
 
       - name: Run completion tests
-        run: mise run -q test completions
+        run: mise run -q test test-completions.bats

@@ -1,9 +1,9 @@
 #!/usr/bin/env bats
 # shiv shell completions test suite
 
-load helpers
+load test/helpers
 
-REPO_DIR="$BATS_TEST_DIRNAME/.."
+REPO_DIR="$BATS_TEST_DIRNAME"
 
 setup() {
   source "$REPO_DIR/lib/shim.sh"
