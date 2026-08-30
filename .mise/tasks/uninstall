@@ -9,6 +9,8 @@ set -eo pipefail
 
 source "$MISE_CONFIG_ROOT/lib/shim.sh"
 
+shiv_help_guard "$@"
+
 NAME="${usage_name}"
 YES="${usage_yes:-false}"
 FORCE="${usage_force:-false}"

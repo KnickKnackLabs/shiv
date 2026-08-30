@@ -2,7 +2,7 @@
 # shiv shim generation — the core mechanism
 #
 # This file creates and manages shims, and sources the other lib files
-# for registry, cache, and source operations.
+# for registry, cache, source, and usage operations.
 
 REPO_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -10,6 +10,7 @@ source "$REPO_LIB_DIR/registry.sh"
 source "$REPO_LIB_DIR/cache.sh"
 source "$REPO_LIB_DIR/resolve.sh"
 source "$REPO_LIB_DIR/sources.sh"
+source "$REPO_LIB_DIR/usage.sh"
 
 SHIV_BIN_DIR="${SHIV_BIN_DIR:-$HOME/.local/bin}"
 SHIV_DATA_DIR="${SHIV_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/shiv}"
