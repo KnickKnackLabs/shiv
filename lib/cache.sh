@@ -16,6 +16,24 @@ shiv_package_tasks_json() {
   )
 }
 
+# Report whether mise can read the package's config well enough to list tasks.
+# Prints mise's diagnostics on failure so the caller can surface them.
+# Ignores SHIV_SKIP_CACHE — this is a validity check, not a cache refresh.
+shiv_package_tasks_discoverable() {
+  local repo_dir="$1"
+  local err
+
+  if err=$(
+    unset MISE_OVERRIDE_CONFIG_FILENAMES
+    mise tasks --json -C "$repo_dir" 2>&1 >/dev/null
+  ); then
+    return 0
+  fi
+
+  printf '%s\n' "$err"
+  return 1
+}
+
 # Cache task list for a tool (name<TAB>description per line).
 # Writes atomically and preserves the old cache if task discovery fails.
 # Pass "true" as the third argument when discovery failure must be reported.

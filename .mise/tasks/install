@@ -215,6 +215,15 @@ else
   echo "  ⚠ No mise.toml found at $TOOL_PATH"
 fi
 
+# Task discovery proves the package can run before any durable state is written.
+# Failing here matches the dependency-setup path above: the clone stays for a
+# retry, but nothing is registered or shimmed.
+if ! discovery_error=$(shiv_package_tasks_discoverable "$TOOL_PATH"); then
+  echo "  ✗ Failed to read tasks for $NAME" >&2
+  echo "$discovery_error" | strip_ansi | sed 's/^/    /' >&2
+  exit 1
+fi
+
 shiv_create_shim "$NAME" "$TOOL_PATH"
 if [ -n "${usage_as:-}" ]; then
   SHIV_REF="$REF" SHIV_REF_MODE="$REF_MODE" shiv_register "$NAME" "$TOOL_PATH" ${ALIASES[@]+"${ALIASES[@]}"}

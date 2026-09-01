@@ -377,6 +377,67 @@ TOML
   echo "$output" | grep -q "No mise.toml"
 }
 
+# A repo whose mise config cannot be parsed, so task discovery fails.
+create_undiscoverable_repo() {
+  local name="$1"
+  local repo_dir="$TEST_HOME/repos/$name"
+
+  mkdir -p "$repo_dir"
+  git -C "$repo_dir" init -q -b main
+  git -C "$repo_dir" config user.email "test@test.com"
+  git -C "$repo_dir" config user.name "Test"
+  echo 'this is not = = valid toml [[[' > "$repo_dir/.mise.toml"
+  git -C "$repo_dir" add .
+  git -C "$repo_dir" commit -q -m "init"
+
+  echo "$repo_dir"
+}
+
+@test "install: fails when task discovery fails" {
+  local repo_dir
+  repo_dir=$(create_undiscoverable_repo "undiscoverable")
+
+  run run_install "undiscoverable" "$repo_dir"
+  [ "$status" -ne 0 ]
+  echo "$output" | grep -q "Failed to read tasks for undiscoverable"
+}
+
+@test "install: does not register a package whose task discovery fails" {
+  local repo_dir
+  repo_dir=$(create_undiscoverable_repo "undiscoverable")
+
+  run run_install "undiscoverable" "$repo_dir"
+  [ "$status" -ne 0 ]
+  run jq -r 'has("undiscoverable")' "$SHIV_REGISTRY"
+  [ "$output" = "false" ]
+}
+
+@test "install: does not create a shim when task discovery fails" {
+  local repo_dir
+  repo_dir=$(create_undiscoverable_repo "undiscoverable")
+
+  run run_install "undiscoverable" "$repo_dir"
+  [ "$status" -ne 0 ]
+  [ ! -e "$SHIV_BIN_DIR/undiscoverable" ]
+}
+
+# Zero tasks is not a setup failure — warn-and-install must still apply.
+@test "install: still installs when config is readable but declares no tasks" {
+  local repo_dir="$TEST_HOME/repos/notasks"
+  mkdir -p "$repo_dir"
+  git -C "$repo_dir" init -q -b main
+  git -C "$repo_dir" config user.email "test@test.com"
+  git -C "$repo_dir" config user.name "Test"
+  echo '[tools]' > "$repo_dir/mise.toml"
+  git -C "$repo_dir" add .
+  git -C "$repo_dir" commit -q -m "init"
+
+  run run_install "notasks" "$repo_dir"
+  [ "$status" -eq 0 ]
+  run jq -r 'has("notasks")' "$SHIV_REGISTRY"
+  [ "$output" = "true" ]
+}
+
 # ============================================================================
 # Shim CWD warning
 # ============================================================================
