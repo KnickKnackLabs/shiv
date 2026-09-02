@@ -1,9 +1,5 @@
 #!/usr/bin/env bats
-# Task --help interception
-#
-# mise consumes `--help` after `--` without rendering help and without binding
-# arguments, so a task that declares a required arg would otherwise die on the
-# unset usage_* variable before it could report anything. See lib/usage.sh.
+# Task --help interception — see lib/usage.sh
 
 REPO_DIR="$BATS_TEST_DIRNAME/.."
 
@@ -11,9 +7,8 @@ setup() {
   export TEST_HOME="$BATS_TEST_TMPDIR/shiv"
   mkdir -p "$TEST_HOME"
 
-  # The guard exits before a task touches the registry. Point the tasks at a
-  # throwaway home anyway, so a regression that lets one run cannot reach the
-  # real one.
+  # The guard exits before touching the registry; isolate anyway so a
+  # regression that gets past it cannot reach the real home.
   export SHIV_BIN_DIR="$TEST_HOME/.local/bin"
   export SHIV_DATA_DIR="$TEST_HOME/.local/share/shiv"
   export SHIV_PACKAGES_DIR="$SHIV_DATA_DIR/packages"
