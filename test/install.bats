@@ -377,7 +377,6 @@ TOML
   echo "$output" | grep -q "No mise.toml"
 }
 
-# A repo whose mise config cannot be parsed, so task discovery fails.
 create_undiscoverable_repo() {
   local name="$1"
   local repo_dir="$TEST_HOME/repos/$name"
@@ -421,7 +420,6 @@ create_undiscoverable_repo() {
   [ ! -e "$SHIV_BIN_DIR/undiscoverable" ]
 }
 
-# Zero tasks is not a setup failure — warn-and-install must still apply.
 @test "install: still installs when config is readable but declares no tasks" {
   local repo_dir="$TEST_HOME/repos/notasks"
   mkdir -p "$repo_dir"

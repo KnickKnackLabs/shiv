@@ -17,7 +17,6 @@ shiv_package_tasks_json() {
 }
 
 # Report whether mise can read the package's config well enough to list tasks.
-# Prints mise's diagnostics on failure so the caller can surface them.
 # Ignores SHIV_SKIP_CACHE — this is a validity check, not a cache refresh.
 shiv_package_tasks_discoverable() {
   local repo_dir="$1"
