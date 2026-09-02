@@ -11,6 +11,8 @@ REPO_DIR="$MISE_CONFIG_ROOT"
 source "$REPO_DIR/lib/shim.sh"
 source "$REPO_DIR/lib/format.sh"
 
+shiv_help_guard "$@"
+
 NAME="${usage_name}"
 LOCAL_PATH="${usage_path:-}"
 SEP='|'
