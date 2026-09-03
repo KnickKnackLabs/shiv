@@ -108,6 +108,39 @@ shiv_latest_release_tag() {
   shiv_latest_release_tag_from_url "https://github.com/${gh_repo}.git"
 }
 
+# Resolve a requested ref against a remote URL, printing the ref to fetch.
+# Bare semver is shiv's interface; the leading "v" is a git tagging convention.
+shiv_resolve_ref_from_url() {
+  local remote_url="$1" ref="$2"
+  local ls_output matched_refs
+
+  if [[ ! "$ref" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    printf '%s\n' "$ref"
+    return 0
+  fi
+
+  if ! ls_output=$(git ls-remote "$remote_url" "$ref" "v$ref" 2>/dev/null); then
+    printf '%s\n' "$ref"
+    return 0
+  fi
+
+  matched_refs=$(printf '%s\n' "$ls_output" | sed '/\^{}$/d; s|.*/||')
+
+  if printf '%s\n' "$matched_refs" | grep -qxF "v$ref" \
+    && ! printf '%s\n' "$matched_refs" | grep -qxF "$ref"; then
+    printf '%s\n' "v$ref"
+    return 0
+  fi
+
+  printf '%s\n' "$ref"
+}
+
+# Resolve a requested ref for a GitHub repo slug.
+shiv_resolve_ref() {
+  local gh_repo="$1" ref="$2"
+  shiv_resolve_ref_from_url "https://github.com/${gh_repo}.git" "$ref"
+}
+
 # Detect whether a ref is a tag, branch, or commit SHA
 # Usage: shiv_detect_ref_type <github-repo-slug> <ref>
 # Prints "tag", "branch", or "commit" to stdout; returns 1 if unknown
