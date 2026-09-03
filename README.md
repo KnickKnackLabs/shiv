@@ -8,7 +8,7 @@
 
 ![shell: bash](https://img.shields.io/badge/shell-bash-4EAA25?style=flat&logo=gnubash&logoColor=white)
 [![runtime: mise](https://img.shields.io/badge/runtime-mise-7c3aed?style=flat)](https://mise.jdx.dev)
-![tests: 316 passing](https://img.shields.io/badge/tests-316%20passing-brightgreen?style=flat)
+![tests: 328 passing](https://img.shields.io/badge/tests-328%20passing-brightgreen?style=flat)
 ![packages: 49](https://img.shields.io/badge/packages-49-blue?style=flat)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat)](LICENSE)
 
@@ -104,6 +104,7 @@ shiv install notes         # newest released semver tag
 shiv install notes@latest  # same as bare install
 shiv install notes@main    # track a branch explicitly
 shiv install notes@v0.8.4  # pin an exact tag
+shiv install notes@0.8.4   # same tag, without the v prefix
 shiv install notes@abc1234 # pin an exact commit
 ```
 
@@ -156,7 +157,7 @@ cd shiv && mise trust && mise install
 mise run test
 ```
 
-Tests use the [KKL-maintained BATS fork](https://github.com/KnickKnackLabs/bats-core) with Rush. The measured eight-job default schedules isolated tests across and within files, covering 316 tests across 17 suites. Use `mise run test --jobs 1` for serial debugging. Completion tests run separately.
+Tests use the [KKL-maintained BATS fork](https://github.com/KnickKnackLabs/bats-core) with Rush. The measured eight-job default schedules isolated tests across and within files, covering 328 tests across 17 suites. Use `mise run test --jobs 1` for serial debugging. Completion tests run separately.
 
 <div align="center">
 

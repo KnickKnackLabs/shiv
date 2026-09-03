@@ -460,6 +460,68 @@ TOML
   [ "$(shiv_registry_ref_mode "alpha")" = "release" ]
 }
 
+@test "install: bare semver ref resolves to the v-prefixed tag" {
+  create_remote_package "alpha" "v1.0.0" "v1.2.0"
+  configure_remote_source "alpha"
+
+  run run_install "alpha@1.0.0"
+  [ "$status" -eq 0 ]
+  [ "$(shiv_registry_ref "alpha")" = "v1.0.0" ]
+  [ "$(shiv_registry_ref_mode "alpha")" = "tag" ]
+  [ "$(git -C "$SHIV_PACKAGES_DIR/alpha" describe --tags --exact-match HEAD)" = "v1.0.0" ]
+}
+
+@test "install: bare semver ref switches an existing clone to the v-prefixed tag" {
+  create_remote_package "alpha" "v1.0.0" "v1.2.0"
+  configure_remote_source "alpha"
+
+  run_install "alpha@v1.0.0"
+
+  run run_install "alpha@1.2.0"
+  [ "$status" -eq 0 ]
+  [ "$(shiv_registry_ref "alpha")" = "v1.2.0" ]
+  [ "$(git -C "$SHIV_PACKAGES_DIR/alpha" describe --tags --exact-match HEAD)" = "v1.2.0" ]
+}
+
+@test "install: bare semver ref is kept when the remote tags without a v" {
+  create_remote_package "alpha" "1.0.0"
+  configure_remote_source "alpha"
+
+  run run_install "alpha@1.0.0"
+  [ "$status" -eq 0 ]
+  [ "$(shiv_registry_ref "alpha")" = "1.0.0" ]
+  [ "$(git -C "$SHIV_PACKAGES_DIR/alpha" describe --tags --exact-match HEAD)" = "1.0.0" ]
+}
+
+@test "install: v-prefixed tag ref installs unchanged" {
+  create_remote_package "alpha" "v1.0.0"
+  configure_remote_source "alpha"
+
+  run run_install "alpha@v1.0.0"
+  [ "$status" -eq 0 ]
+  [ "$(shiv_registry_ref "alpha")" = "v1.0.0" ]
+  [ "$(shiv_registry_ref_mode "alpha")" = "tag" ]
+}
+
+@test "install: semver ref with no matching tag still fails" {
+  create_remote_package "alpha" "v1.0.0"
+  configure_remote_source "alpha"
+
+  run run_install "alpha@9.9.9"
+  [ "$status" -ne 0 ]
+  echo "$output" | grep -q "ref '9.9.9' not found"
+}
+
+@test "install: branch ref is not treated as a version" {
+  create_remote_package "alpha" "v1.0.0"
+  configure_remote_source "alpha"
+
+  run run_install "alpha@main"
+  [ "$status" -eq 0 ]
+  [ "$(shiv_registry_ref "alpha")" = "main" ]
+  [ "$(shiv_registry_ref_mode "alpha")" = "branch" ]
+}
+
 @test "install: @main explicitly tracks the main branch" {
   create_remote_package "alpha" "v1.0.0"
   configure_remote_source "alpha"

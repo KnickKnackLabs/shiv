@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #MISE description="Install a tool — from the package index or a local path"
-#USAGE arg "<name>" help="Package name, optionally with ref (bare/@latest release, @main branch, @v1.0.0 tag)"
+#USAGE arg "<name>" help="Package name, optionally with ref (bare/@latest release, @main branch, @1.0.0 or @v1.0.0 tag)"
 #USAGE arg "[path]" help="Local path to repo (optional — if omitted, clones from package index)"
 #USAGE flag "--as <alias>" var=#true help="Command alias(es) — creates symlinks to the package shim"
 #USAGE example "shiv install shimmer" header="Install the latest stable release"
@@ -79,7 +79,7 @@ else
     REF_TYPE="tag"
     REF_MODE="release"
   else
-    REF="$REQUESTED_REF"
+    REF=$(shiv_resolve_ref "$GH_REPO" "$REQUESTED_REF")
     REF_TYPE=$(shiv_detect_ref_type "$GH_REPO" "$REF") || exit 1
     case "$REF_TYPE" in
       branch) REF_MODE="branch" ;;

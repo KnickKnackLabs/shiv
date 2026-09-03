@@ -329,6 +329,67 @@ setup() {
   [ "$result" = "commit" ]
 }
 
+create_tagged_remote() {
+  local bare_repo="$1"
+  shift
+  local work_dir="$TEST_HOME/work-$(basename "$bare_repo" .git)"
+
+  mkdir -p "$work_dir"
+  git -C "$work_dir" init -q -b main
+  git -C "$work_dir" config user.email "test@test.com"
+  git -C "$work_dir" config user.name "Test"
+  touch "$work_dir/README.md"
+  git -C "$work_dir" add .
+  git -C "$work_dir" commit -q -m "init"
+
+  local tag
+  for tag in "$@"; do
+    git -C "$work_dir" tag -a "$tag" -m "$tag"
+  done
+
+  git clone -q --bare "$work_dir" "$bare_repo"
+  rm -rf "$work_dir"
+}
+
+@test "resolve-ref: bare semver resolves to the v-prefixed tag" {
+  local remote="$TEST_HOME/remote.git"
+  create_tagged_remote "$remote" "v1.2.3"
+
+  [ "$(shiv_resolve_ref_from_url "$remote" "1.2.3")" = "v1.2.3" ]
+}
+
+@test "resolve-ref: bare semver is kept when the remote tags without a v" {
+  local remote="$TEST_HOME/remote.git"
+  create_tagged_remote "$remote" "1.2.3" "v1.2.3"
+
+  [ "$(shiv_resolve_ref_from_url "$remote" "1.2.3")" = "1.2.3" ]
+}
+
+@test "resolve-ref: v-prefixed request is left alone" {
+  local remote="$TEST_HOME/remote.git"
+  create_tagged_remote "$remote" "v1.2.3"
+
+  [ "$(shiv_resolve_ref_from_url "$remote" "v1.2.3")" = "v1.2.3" ]
+}
+
+@test "resolve-ref: branch names pass through untouched" {
+  local remote="$TEST_HOME/remote.git"
+  create_tagged_remote "$remote" "v1.2.3"
+
+  [ "$(shiv_resolve_ref_from_url "$remote" "main")" = "main" ]
+}
+
+@test "resolve-ref: unmatched semver passes through for the caller to report" {
+  local remote="$TEST_HOME/remote.git"
+  create_tagged_remote "$remote" "v1.2.3"
+
+  [ "$(shiv_resolve_ref_from_url "$remote" "9.9.9")" = "9.9.9" ]
+}
+
+@test "resolve-ref: unreachable remote passes the ref through" {
+  [ "$(shiv_resolve_ref_from_url "$TEST_HOME/missing.git" "1.2.3")" = "1.2.3" ]
+}
+
 # ============================================================================
 # Schema validation
 # ============================================================================
