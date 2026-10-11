@@ -237,11 +237,17 @@ RESOLVE
     echo '# --- end embedded resolver ---'
     echo ''
 
+    echo '# --- embedded from lib/caller-env.sh ---'
+    sed '1{/^#!/d;}' "$REPO_LIB_DIR/caller-env.sh"
+    echo '# --- end embedded caller environment ---'
+    echo ''
+
     # Part 3: main dispatch logic
     cat <<SCRIPT
 
 # --- main ---
 _shiv_check_repo
+shiv_snapshot_caller_env "${caller_pwd_var%CALLER_PWD}" || exit 1
 export ${caller_pwd_var}="\$PWD"
 _shiv_check_cwd "\$@"
 
