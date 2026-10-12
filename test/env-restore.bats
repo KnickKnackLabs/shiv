@@ -4,6 +4,7 @@ REPO_DIR="$BATS_TEST_DIRNAME/.."
 load helpers
 
 setup() {
+  cd "$BATS_TEST_TMPDIR"
   export PACKAGE="$BATS_TEST_TMPDIR/package with spaces"
   mkdir -p "$PACKAGE"
   export MISE_AUTO_INSTALL=false MISE_TASK_RUN_AUTO_INSTALL=false MISE_OFFLINE=true

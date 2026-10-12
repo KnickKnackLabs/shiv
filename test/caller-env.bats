@@ -5,6 +5,7 @@ REPO_DIR="$BATS_TEST_DIRNAME/.."
 load helpers
 
 setup() {
+  cd "$BATS_TEST_TMPDIR"
   source "$REPO_DIR/lib/shim.sh"
   export SHIV_BIN_DIR="$BATS_TEST_TMPDIR/bin"
   export SHIV_CACHE_DIR="$BATS_TEST_TMPDIR/cache"

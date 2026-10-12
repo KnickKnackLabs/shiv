@@ -68,7 +68,9 @@ TOML
   [[ "$output" = *RESTORED* ]]
 }
 
-@test "generated restoration: explicit local overrides win caller settings" {
+# These precedence checks cover inline tasks, not executable tasks or mise exec.
+# The task-dependent behavior is documented in docs/caller-environment.md.
+@test "generated restoration: explicit local overrides win for inline tasks" {
   create_restoring_package
   cat > "$PACKAGE/mise.local.toml" <<'TOML'
 [env]
@@ -83,7 +85,7 @@ TOML
   [[ "$output" = *RESTORED* ]]
 }
 
-@test "generated restoration: local source hooks also override caller settings" {
+@test "generated restoration: local source hooks override caller settings for inline tasks" {
   create_restoring_package
   printf 'export MYAPP_PROVIDER="local source"\n' > "$PACKAGE/local-source.sh"
   printf '[env]\n_.source = "local-source.sh"\n' > "$PACKAGE/mise.local.toml"

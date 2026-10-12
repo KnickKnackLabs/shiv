@@ -6,10 +6,15 @@ REPO_DIR="$BATS_TEST_DIRNAME/.."
 load helpers
 
 setup() {
+  setup_shiv_on_path
+  mock_gum_formatting
+
   export INPUT_FIXTURE="$BATS_TEST_TMPDIR/input-fixture"
   export SHIV_CONFIG_DIR="$INPUT_FIXTURE/config"
   export SHIV_REGISTRY="$SHIV_CONFIG_DIR/registry.json"
   export SHIV_BIN_DIR="$INPUT_FIXTURE/bin"
+  export SHIV_DATA_DIR="$INPUT_FIXTURE/data"
+  export SHIV_PACKAGES_DIR="$SHIV_DATA_DIR/packages"
   export SHIV_CACHE_DIR="$INPUT_FIXTURE/cache"
   mkdir -p "$INPUT_FIXTURE/lib" "$INPUT_FIXTURE/.mise/tasks/completions" "$SHIV_CONFIG_DIR" "$SHIV_BIN_DIR"
 
@@ -39,6 +44,16 @@ shiv_registry_aliases() {
 }
 shiv_assert_active_packages_match_registry() { return 0; }
 SH
+}
+
+@test "task inputs: public fixture selects the test-owned Gum formatter" {
+  cat >> "$INPUT_FIXTURE/mise.toml" <<'TOML'
+[tasks.formatter-path]
+run = "command -v gum"
+TOML
+  run shiv_input_fixture formatter-path
+  [ "$status" -eq 0 ]
+  [ "$output" = "$BATS_TEST_TMPDIR/mock-bin/gum" ]
 }
 
 @test "task inputs: registry failures stop list, outdated, update and doctor" {
