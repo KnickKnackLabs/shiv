@@ -19,6 +19,40 @@ _shiv_check_cwd() {
   fi
 }
 
+_shiv_handle_version() {
+  local version branch updated git_prefix git_var git_local_vars
+
+  # Git exports repository-selection variables to hooks. Clear them before
+  # inspecting the package so caller metadata cannot override git -C.
+  if ! git_local_vars=$(git rev-parse --local-env-vars 2>/dev/null); then
+    printf '%s\n' "$SHIV_PACKAGE_NAME: cannot determine Git-local variables" >&2
+    return 1
+  fi
+  while IFS= read -r git_var; do
+    [ -n "$git_var" ] && unset "$git_var"
+  done <<< "$git_local_vars"
+
+  # Require the package worktree root, not an unrelated parent checkout.
+  if ! git_prefix=$(git -C "$REPO" rev-parse --show-prefix 2>/dev/null) || [ -n "$git_prefix" ]; then
+    version="unknown"
+  elif ! version=$(git -C "$REPO" describe --tags --exact-match HEAD 2>/dev/null); then
+    version=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || printf 'unknown')
+  fi
+
+  if [ "$version" = "unknown" ]; then
+    branch="unknown"
+    updated="unknown"
+  else
+    if [ -n "$(git -C "$REPO" status --porcelain 2>/dev/null)" ]; then
+      version="${version}*"
+    fi
+    branch=$(git -C "$REPO" symbolic-ref --quiet --short HEAD 2>/dev/null || printf 'detached')
+    updated=$(git -C "$REPO" log -1 --format='%cd' --date=relative 2>/dev/null || printf 'unknown')
+  fi
+
+  printf '%s %s (branch: %s, updated: %s)\n' "$SHIV_PACKAGE_NAME" "$version" "$branch" "$updated"
+}
+
 _shiv_select_package_config() {
   local artifact
   for artifact in "$SHIV_RESTORATION_CONFIG" "${SHIV_RESTORATION_CONFIG%/*}/restore.sh"; do

@@ -17,6 +17,130 @@ SHIV_BIN_DIR="${SHIV_BIN_DIR:-$HOME/.local/bin}"
 SHIV_DATA_DIR="${SHIV_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/shiv}"
 SHIV_PACKAGES_DIR="${SHIV_PACKAGES_DIR:-$SHIV_DATA_DIR/packages}"
 
+shiv_canonical_package_path() {
+  local package_root="$1"
+
+  if [ -d "$package_root" ]; then
+    (cd "$package_root" && pwd -P)
+  else
+    printf '%s\n' "$package_root"
+  fi
+}
+
+shiv_mise_scoped_package_path() {
+  local name="$1"
+  local caller_dir="$2"
+  local mise_bin="${MISE_BIN:-mise}"
+  local executable package_root
+
+  if ! executable=$("$mise_bin" -C "$caller_dir" which "$name" 2>/dev/null); then
+    return 1
+  fi
+
+  [ -f "$executable" ] || return 1
+  grep -q "# managed by shiv" "$executable" 2>/dev/null || return 1
+
+  package_root=$(shiv_read_generated_repo "$executable") || return 1
+  printf '%s\n' "$package_root"
+}
+
+shiv_global_package_path() {
+  local name="$1"
+  local package_root resolved
+
+  package_root=$(shiv_registry_path "$name")
+  if [ -z "$package_root" ]; then
+    resolved=$(shiv_registry_resolve "$name")
+    if [ -n "$resolved" ]; then
+      package_root=$(shiv_registry_path "$resolved")
+    fi
+  fi
+
+  [ -n "$package_root" ] || return 1
+  printf '%s\n' "$package_root"
+}
+
+shiv_active_mise_package_names() {
+  local caller_dir="$1"
+  local mise_bin="${MISE_BIN:-mise}"
+  local tools_json active_names
+
+  if ! tools_json=$("$mise_bin" -C "$caller_dir" ls --json 2>/dev/null); then
+    echo "shiv: failed to inspect active mise tools from $caller_dir" >&2
+    return 1
+  fi
+
+  if ! active_names=$(printf '%s\n' "$tools_json" | jq -r '
+    to_entries[]
+    | select(.key | startswith("shiv:"))
+    | select(any(.value[]?; .active == true))
+    | .key | sub("^shiv:"; "")
+  '); then
+    echo "shiv: mise returned invalid tool inventory for $caller_dir" >&2
+    return 1
+  fi
+
+  printf '%s\n' "$active_names"
+}
+
+shiv_assert_active_package_matches_registry() {
+  local name="$1"
+  local registry_root="$2"
+  local caller_dir="$3"
+  local require_active="${4:-false}"
+  local active_root active_canonical registry_canonical
+
+  if ! active_root=$(shiv_mise_scoped_package_path "$name" "$caller_dir"); then
+    if [ "$require_active" = "true" ]; then
+      echo "shiv: failed to resolve active mise package 'shiv:$name' from $caller_dir" >&2
+      return 1
+    fi
+    return 0
+  fi
+
+  active_canonical=$(shiv_canonical_package_path "$active_root")
+  registry_canonical=$(shiv_canonical_package_path "$registry_root")
+  [ "$active_canonical" = "$registry_canonical" ] && return 0
+
+  cat >&2 <<EOF
+shiv: active mise package root differs from the global registry for '$name'
+  active mise root:    $active_canonical
+  global registry root: $registry_canonical
+  caller:              $caller_dir
+Refusing to inspect or modify the registry package while this codebase executes a different checkout.
+Use mise to refresh the active 'shiv:$name' tool, or run from a directory where it is not active.
+EOF
+  return 1
+}
+
+shiv_assert_active_packages_match_registry() {
+  local caller_dir="$1"
+  local active_names name registry_root
+
+  active_names=$(shiv_active_mise_package_names "$caller_dir") || return 1
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    if registry_root=$(shiv_global_package_path "$name"); then
+      shiv_assert_active_package_matches_registry "$name" "$registry_root" "$caller_dir" true || return 1
+    fi
+  done <<< "$active_names"
+}
+
+shiv_assert_active_registry_package_matches() {
+  local registry_name="$1"
+  local registry_root="$2"
+  local caller_dir="$3"
+  local active_names active_name resolved
+
+  active_names=$(shiv_active_mise_package_names "$caller_dir") || return 1
+  while IFS= read -r active_name; do
+    [ -n "$active_name" ] || continue
+    resolved=$(shiv_registry_resolve "$active_name")
+    [ "$resolved" = "$registry_name" ] || continue
+    shiv_assert_active_package_matches_registry "$active_name" "$registry_root" "$caller_dir" true || return 1
+  done <<< "$active_names"
+}
+
 # Create a shim for a tool
 shiv_caller_pwd_var_name() {
   local name="$1"
@@ -32,11 +156,12 @@ shiv_caller_pwd_var_name() {
 shiv_create_shim() {
   local name="$1" repo_dir="$2"
   local default_task=""
-  local caller_pwd_var caller_owner package_dir directory_key task_map_quoted
+  local caller_pwd_var caller_owner package_dir directory_key task_map_quoted repo_escaped
   caller_pwd_var=$(shiv_caller_pwd_var_name "$name")
   caller_owner=$(shiv_caller_env_key "$name") || return 1
   package_dir=$(cd "$repo_dir" && pwd -P) || return 1
   directory_key=$(shiv_caller_env_key "$package_dir") || return 1
+  repo_escaped=$(shiv_double_quote_escape "$repo_dir") || return 1
   task_map_quoted=$(shiv_shell_quote "$SHIV_CACHE_DIR/tasks/$name")
 
   # At install time, detect a default task for single-command tools.
@@ -104,7 +229,7 @@ shiv_create_shim() {
   if ! {
     printf '%s\n' '#!/usr/bin/env bash' '# managed by shiv' &&
     printf 'SHIV_PACKAGE_NAME=%s\n' "$(shiv_shell_quote "$name")" &&
-    printf 'REPO=%s\n' "$(shiv_shell_quote "$repo_dir")" &&
+    printf 'REPO="%s"\n' "$repo_escaped" &&
     printf 'DEFAULT_TASK=%s\n' "$(shiv_shell_quote "$default_task")" &&
     printf 'HAS_TASKS_TASK=%s\n' "$(shiv_shell_quote "$has_tasks_task")" &&
     printf 'HAS_HELP_TASK=%s\n' "$(shiv_shell_quote "$has_help_task")" &&
@@ -148,7 +273,7 @@ shiv_create_alias_symlinks() {
   shift
   local aliases=("$@")
   for alias in "${aliases[@]}"; do
-    ln -sf "$name" "$SHIV_BIN_DIR/$alias"
+    ln -sf "$name" "$SHIV_BIN_DIR/$alias" || return 1
   done
 }
 
@@ -169,12 +294,65 @@ shiv_shim_matches_repo() {
   expected_assignment=$(shiv_shell_quote "$expected_repo") || return 1
   [ "$repo_assignment" = "$expected_assignment" ] && return 0
 
-  # Old generators used unescaped double quotes. Accept only paths that were
-  # literal in that format, not shell expansions or prematurely closed quotes.
-  case "$expected_repo" in
-    *[\"\$\`\\]*) return 1 ;;
-  esac
-  [ "$repo_assignment" = "\"$expected_repo\"" ]
+  expected_assignment=$(shiv_double_quote_escape "$expected_repo") || return 1
+  [ "$repo_assignment" = "\"$expected_assignment\"" ]
+}
+
+# Refresh every generated artifact for a registered package.
+shiv_refresh_package() {
+  local name="$1" repo_dir="$2" require_cache_refresh="${3:-false}"
+  local aliases=()
+  local alias_output
+
+  shiv_create_shim "$name" "$repo_dir" || return 1
+  shiv_cache_tasks "$name" "$repo_dir" "$require_cache_refresh" || return 1
+  shiv_cache_task_map "$name" "$repo_dir" "$require_cache_refresh" || return 1
+
+  alias_output=$(shiv_registry_aliases "$name") || return 1
+  while IFS= read -r alias; do
+    [ -n "$alias" ] && aliases+=("$alias")
+  done <<< "$alias_output"
+
+  if [ "${#aliases[@]}" -gt 0 ]; then
+    shiv_create_alias_symlinks "$name" "${aliases[@]}" || return 1
+  fi
+}
+
+# Escape shell-active content for a generated double-quoted value.
+shiv_double_quote_escape() {
+  local value="$1"
+  value=${value//\\/\\\\}
+  value=${value//\"/\\\"}
+  value=${value//\$/\\\$}
+  value=${value//\`/\\\`}
+  printf '%s' "$value"
+}
+
+# Read REPO from a generated shim without evaluating its shell source.
+shiv_read_generated_repo() {
+  local shim="$1" value result="" char next
+  value=$(sed -n 's/^REPO="\(.*\)"$/\1/p' "$shim")
+  [ -n "$value" ] || return 1
+
+  while [ -n "$value" ]; do
+    char=${value%"${value#?}"}
+    value=${value#?}
+
+    if [ "$char" != "\\" ]; then
+      result="${result}${char}"
+      continue
+    fi
+
+    [ -n "$value" ] || return 1
+    next=${value%"${value#?}"}
+    value=${value#?}
+    case "$next" in
+      \\|'"'|'$'|'`') result="${result}${next}" ;;
+      *) result="${result}\\${next}" ;;
+    esac
+  done
+
+  printf '%s\n' "$result"
 }
 
 # Quote a value for POSIX-ish shell eval output.

@@ -11,6 +11,10 @@ case "${1:-}" in
   --help|-h|help)
     _shiv_handle_help "${1:-help}"
     ;;
+  --version)
+    _shiv_handle_version || exit 1
+    exit 0
+    ;;
   tasks)
     _shiv_handle_tasks "$@"
     ;;

@@ -3,6 +3,8 @@
 #USAGE arg "<name>" help="Package name to remove"
 #USAGE flag "-y --yes" default=#false help="Skip confirmation prompt"
 #USAGE flag "--force" default=#false help="Override safety checks (e.g., uninstalling shiv)"
+#USAGE example "shiv uninstall old-tool" header="Remove one managed package"
+#USAGE example "shiv uninstall old-tool --yes" header="Skip confirmation"
 set -eo pipefail
 
 source "$MISE_CONFIG_ROOT/lib/shim.sh"

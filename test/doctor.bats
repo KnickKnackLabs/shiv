@@ -16,10 +16,12 @@ setup() {
   export SHIV_CONFIG_DIR="$TEST_HOME/.config/shiv"
   export SHIV_CACHE_DIR="$TEST_HOME/.cache/shiv"
   export SHIV_REGISTRY="$SHIV_CONFIG_DIR/registry.json"
+  export SHIV_SOURCES=""
 
   mkdir -p "$SHIV_BIN_DIR"
   shiv_init_registry
   setup_shiv_on_path
+  mock_gum_formatting
 }
 
 
@@ -28,13 +30,10 @@ create_installed_package() {
   local name="$1"
   local repo_dir="$SHIV_PACKAGES_DIR/$name"
 
+  # Doctor only needs a valid worktree for this fixture; commits and identity
+  # would add process work without exercising another health check.
   mkdir -p "$repo_dir"
   git -C "$repo_dir" init -q -b main
-  git -C "$repo_dir" config user.email "test@test.com"
-  git -C "$repo_dir" config user.name "Test"
-  touch "$repo_dir/README.md"
-  git -C "$repo_dir" add .
-  git -C "$repo_dir" commit -q -m "init"
 
   shift
   shiv_register "$name" "$repo_dir" "$@"
@@ -47,6 +46,13 @@ create_installed_package() {
   fi
 }
 
+make_source_available() {
+  local name="$1"
+  mkdir -p "$SHIV_CONFIG_DIR/sources"
+  jq -n --arg name "$name" --arg repo "test/$name" \
+    '{($name): $repo}' > "$SHIV_CONFIG_DIR/sources/test.json"
+}
+
 # Helper: run shiv doctor through the mock shim
 run_doctor() {
   shiv doctor 2>&1
@@ -56,7 +62,8 @@ run_doctor() {
 # Header
 # ============================================================================
 
-@test "doctor: shows health header" {
+@test "doctor: shows health header through real Gum rendering" {
+  use_real_gum
   run run_doctor
   echo "$output" | grep -q "SHIV HEALTH"
   echo "$output" | grep -q "Registry"
@@ -98,6 +105,18 @@ run_doctor() {
   echo "$output" | grep "alpha" | grep -q "✓"
 }
 
+@test "doctor: generated shim with shell-active literal path is healthy" {
+  local repo_dir="$TEST_HOME/repos/path with apostrophe' and \$cash and \`tick\` and \"quote\" and \\slash/alpha"
+  mkdir -p "$repo_dir"
+  git -C "$repo_dir" init -q -b main
+  shiv_register "alpha" "$repo_dir"
+  shiv_create_shim "alpha" "$repo_dir"
+
+  run run_doctor
+  [ "$status" -eq 0 ]
+  echo "$output" | grep "alpha" | grep -q "✓"
+}
+
 @test "doctor: multiple healthy packages all show ✓" {
   create_installed_package "alpha"
   create_installed_package "bravo"
@@ -118,6 +137,7 @@ run_doctor() {
 @test "doctor: current header handles literal quotes dollars and backslashes" {
   local repo_dir="$TEST_HOME/space 'quote \"double \$dollar \\slash"
   mkdir -p "$repo_dir"
+  git -C "$repo_dir" init -q -b main
   shiv_register "alpha" "$repo_dir"
   shiv_create_shim "alpha" "$repo_dir"
 
@@ -186,28 +206,31 @@ run_doctor() {
 # Missing shim
 # ============================================================================
 
-@test "doctor: missing shim shows ✗" {
+@test "doctor: missing shim in a healthy repo suggests reshim" {
   create_installed_package "alpha"
   rm "$SHIV_BIN_DIR/alpha"
 
   run run_doctor
   [ "$status" -ne 0 ]
-  echo "$output" | grep "alpha" | grep -q "✗"
-  echo "$output" | grep -q "shim missing"
+  echo "$output" | grep "alpha" | grep -q "✗ (1)"
+  [[ "$output" == *"shim missing at $SHIV_BIN_DIR/alpha"* ]]
+  [[ "$output" == *"Repair generated artifacts with: shiv reshim"* ]]
+  [[ "$output" != *"shiv uninstall alpha"* ]]
+  [[ "$output" != *"Package not found in any source index"* ]]
 }
 
 # ============================================================================
 # Shim not managed by shiv
 # ============================================================================
 
-@test "doctor: unmanaged shim shows ✗" {
+@test "doctor: unmanaged shim requires inspection before reshim" {
   create_installed_package "alpha"
-  # Overwrite shim with a non-shiv script
   echo '#!/bin/bash' > "$SHIV_BIN_DIR/alpha"
 
   run run_doctor
   [ "$status" -ne 0 ]
-  echo "$output" | grep -q "not managed by shiv"
+  [[ "$output" == *"shim exists but not managed by shiv"* ]]
+  [[ "$output" == *"Inspect or move the conflicting shim, then run 'shiv reshim'"* ]]
 }
 
 # ============================================================================
@@ -331,6 +354,37 @@ SCRIPT
   echo "$output" | grep "alpha" | grep -q "✓"
   echo "$output" | grep -q "ORPHANED SHIMS"
   echo "$output" | grep -q "ghost"
+}
+
+# ============================================================================
+# Missing-repository recovery
+# ============================================================================
+
+@test "doctor: missing repo absent from sources suggests uninstall without inflating count" {
+  local missing_repo="$TEST_HOME/nonexistent-repo"
+  shiv_register "ghost" "$missing_repo"
+
+  run run_doctor
+  [ "$status" -ne 0 ]
+  echo "$output" | grep "ghost" | grep -q "✗ (2)"
+  [[ "$output" == *"repo not found at $missing_repo"* ]]
+  [[ "$output" == *"shim missing at $SHIV_BIN_DIR/ghost"* ]]
+  [[ "$output" == *"Package not found in any source index"* ]]
+  [[ "$output" == *"Remove the stale registration with: shiv uninstall ghost"* ]]
+  [[ "$output" != *"shiv reshim"* ]]
+}
+
+@test "doctor: missing repo still in sources suggests reinstall" {
+  local missing_repo="$TEST_HOME/nonexistent-repo"
+  make_source_available "alpha"
+  shiv_register "alpha" "$missing_repo"
+
+  run run_doctor
+  [ "$status" -ne 0 ]
+  echo "$output" | grep "alpha" | grep -q "✗ (2)"
+  [[ "$output" == *"Reinstall the missing repository with: shiv install alpha"* ]]
+  [[ "$output" != *"shiv uninstall alpha"* ]]
+  [[ "$output" != *"shiv reshim"* ]]
 }
 
 # ============================================================================

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 #MISE description="Pull latest and refresh shims — optionally for a single package"
-#USAGE arg "[name]" help="Package to update (default: all)"
+#USAGE arg "[name]" default="" help="Package to update (default: all)"
+#USAGE example "shiv update" header="Update every eligible package"
+#USAGE example "shiv update shimmer" header="Update one package"
 set -euo pipefail
 
 source "$MISE_CONFIG_ROOT/lib/shim.sh"
@@ -8,6 +10,7 @@ source "$MISE_CONFIG_ROOT/lib/shim.sh"
 shiv_init_registry
 
 TARGET="${usage_name:-}"
+CALLER_DIR="${SHIV_CALLER_PWD:-${CALLER_PWD:-${MISE_ORIGINAL_CWD:-$PWD}}}"
 SEP='|'
 
 # Collect results for summary table.
@@ -33,23 +36,6 @@ package_version() {
     printf '%s%s\n' "$tag" "$dirty_marker"
   else
     printf '%s%s\n' "$fallback" "$dirty_marker"
-  fi
-}
-
-refresh_package() {
-  local name="$1" repo="$2"
-  local aliases=()
-
-  shiv_create_shim "$name" "$repo"
-  shiv_cache_tasks "$name" "$repo"
-  shiv_cache_task_map "$name" "$repo"
-
-  while IFS= read -r _alias; do
-    [ -n "$_alias" ] && aliases+=("$_alias")
-  done < <(shiv_registry_aliases "$name")
-
-  if [ ${#aliases[@]} -gt 0 ]; then
-    shiv_create_alias_symlinks "$name" "${aliases[@]}"
   fi
 }
 
@@ -84,7 +70,7 @@ update_branch_like() {
   if output=$(git -C "$repo" pull --ff-only 2>&1); then
     after=$(git -C "$repo" rev-parse --short HEAD 2>/dev/null || echo "unknown")
     version=$(package_version "$repo" "$after")
-    refresh_package "$name" "$repo"
+    shiv_refresh_package "$name" "$repo"
 
     if [ "$before" = "$after" ]; then
       add_result "$name" "$branch" "$version" "✓" "already up to date"
@@ -143,7 +129,7 @@ update_release() {
 
   current_tag=$(git -C "$repo" describe --tags --exact-match HEAD 2>/dev/null || echo "")
   if [ "$ref" = "$latest" ] && [ "$current_tag" = "$latest" ]; then
-    refresh_package "$name" "$repo"
+    shiv_refresh_package "$name" "$repo"
     add_result "$name" "$branch" "$version" "✓" "already on latest release"
     echo "  ✓ $name — already on latest release ($latest)"
     return 0
@@ -167,7 +153,7 @@ update_release() {
   branch=$(git -C "$repo" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "-")
   version=$(package_version "$repo" "$after")
   shiv_registry_set_ref "$name" "$latest" "release"
-  refresh_package "$name" "$repo"
+  shiv_refresh_package "$name" "$repo"
 
   if [ "$before" = "$after" ]; then
     add_result "$name" "$branch" "$version" "✓" "release intent recorded as $latest"
@@ -179,9 +165,14 @@ update_release() {
   fi
 }
 
+preflight_all_package_roots() {
+  shiv_assert_active_packages_match_registry "$CALLER_DIR"
+}
+
 # Update a single package, appending result to RESULTS array.
 update_one() {
   local name="$1"
+  local preflight_root="${2:-true}"
   local repo resolved mode ref branch version reason
 
   repo=$(shiv_registry_path "$name")
@@ -198,6 +189,12 @@ update_one() {
   if [ -z "$repo" ]; then
     add_result "$name" "-" "-" "✗" "not a registered package or alias"
     echo "  ✗ $name — not a registered package or alias"
+    return 1
+  fi
+
+  if [ "$preflight_root" = "true" ] \
+    && ! shiv_assert_active_registry_package_matches "$name" "$repo" "$CALLER_DIR"; then
+    add_result "$name" "-" "-" "✗" "active mise package root differs from global registry"
     return 1
   fi
 
@@ -259,15 +256,17 @@ else
     echo "No tools registered."
     exit 0
   fi
+  preflight_all_package_roots
+
   echo "Updating $COUNT tool(s)..."
   echo ""
   rc=0
   while IFS=$'\t' read -r name _repo _ref; do
-    update_one "$name" || rc=1
+    update_one "$name" false || rc=1
   done < <(shiv_registry_entries)
 fi
 
 # Summary table (multi-package updates only)
 echo ""
-printf '%s\n' "${RESULTS[@]}" | gum table -s "$SEP" -c "PACKAGE,BRANCH,VERSION,STATUS,DETAIL" -p --border normal
+printf '%s\n' ${RESULTS[@]+"${RESULTS[@]}"} | gum table -s "$SEP" -c "PACKAGE,BRANCH,VERSION,STATUS,DETAIL" -p --border normal
 exit "$rc"

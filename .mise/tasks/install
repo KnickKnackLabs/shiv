@@ -3,6 +3,8 @@
 #USAGE arg "<name>" help="Package name, optionally with ref (bare/@latest release, @main branch, @v1.0.0 tag)"
 #USAGE arg "[path]" help="Local path to repo (optional — if omitted, clones from package index)"
 #USAGE flag "--as <alias>" var=#true help="Command alias(es) — creates symlinks to the package shim"
+#USAGE example "shiv install shimmer" header="Install the latest stable release"
+#USAGE example "shiv install shimmer@main --as shimmer-dev" header="Track a branch under an alias"
 set -euo pipefail
 
 REPO_DIR="$MISE_CONFIG_ROOT"
@@ -27,7 +29,9 @@ fi
 # Collect aliases from --as flags (var=#true gives space-separated string)
 ALIASES=()
 if [ -n "${usage_as:-}" ]; then
-  IFS=' ' read -ra ALIASES <<< "$usage_as"
+  while IFS= read -r alias; do
+    [ -z "$alias" ] || ALIASES+=("$alias")
+  done < <(printf '%s' "$usage_as" | xargs printf '%s\n')
 fi
 
 if [ -n "$LOCAL_PATH" ]; then
@@ -213,7 +217,7 @@ fi
 
 shiv_create_shim "$NAME" "$TOOL_PATH"
 if [ -n "${usage_as:-}" ]; then
-  SHIV_REF="$REF" SHIV_REF_MODE="$REF_MODE" shiv_register "$NAME" "$TOOL_PATH" "${ALIASES[@]}"
+  SHIV_REF="$REF" SHIV_REF_MODE="$REF_MODE" shiv_register "$NAME" "$TOOL_PATH" ${ALIASES[@]+"${ALIASES[@]}"}
 else
   SHIV_REF="$REF" SHIV_REF_MODE="$REF_MODE" shiv_register "$NAME" "$TOOL_PATH"
 fi
@@ -222,7 +226,7 @@ shiv_cache_task_map "$NAME" "$TOOL_PATH"
 
 # Create alias symlinks
 if [ -n "${usage_as:-}" ]; then
-  shiv_create_alias_symlinks "$NAME" "${ALIASES[@]}"
+  shiv_create_alias_symlinks "$NAME" ${ALIASES[@]+"${ALIASES[@]}"}
 fi
 
 # --- Summary card ---
@@ -281,8 +285,8 @@ fi
 
 # Format aliases
 alias_display="-"
-if [ -n "${usage_as:-}" ]; then
-  alias_display="${ALIASES[*]}"
+if [ "${#ALIASES[@]}" -gt 0 ]; then
+  alias_display="$(printf '%s\n' ${ALIASES[@]+"${ALIASES[@]}"} | paste -sd' ' -)"
 fi
 
 # Build summary card as key-value table

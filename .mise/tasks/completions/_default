@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 #MISE description="Output shell completion script (auto-detects shell)"
 #USAGE arg "[shell]" help="Shell type: bash, zsh, or fish (auto-detected if omitted)"
+#USAGE example "shiv completions bash" header="Print Bash completions"
 set -eo pipefail
 
 REPO_DIR="$MISE_CONFIG_ROOT"

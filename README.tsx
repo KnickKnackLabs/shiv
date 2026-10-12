@@ -22,8 +22,7 @@ const packageCount = Object.keys(packages).length;
 
 // Count test files and test cases
 const testDir = join(REPO_DIR, "test");
-const testFiles = readdirSync(testDir).filter((f) => f.endsWith(".bats"));
-const defaultTestFiles = testFiles.filter((f) => f !== "completions.bats");
+const defaultTestFiles = readdirSync(testDir).filter((f) => f.endsWith(".bats"));
 const testCount = defaultTestFiles.reduce((sum, f) => {
   const content = readFileSync(join(testDir, f), "utf-8");
   return sum + (content.match(/@test /g)?.length ?? 0);
@@ -67,11 +66,15 @@ shiv install shimmer
 # Use it — spaces work as namespace separators
 shimmer agent message k7r2 "hello"
 
+# Check the installed version
+shimmer --version
+
 # See what's installed
 shiv list
 
-# Update everything
+# Update package refs, then regenerate every clean registered shim
 shiv update
+shiv reshim
 
 # Check health
 shiv doctor`}</CodeBlock>
@@ -100,6 +103,7 @@ shiv doctor`}</CodeBlock>
         a package-specific caller variable (for example, <Code>SHIMMER_CALLER_PWD</Code>) so tools know where you invoked them,
         translates space-separated arguments to colon-joined task names
         (<Code>agent message</Code> → <Code>agent:message</Code>),
+        reports the package's exact tag or commit through <Code>--version</Code>,
         and provides tab completions for all available tasks.
       </Paragraph>
     </Section>
@@ -175,6 +179,24 @@ shiv install notes@abc1234 # pin an exact commit`}</CodeBlock>
       </Paragraph>
 
       <Paragraph>
+        When the caller&apos;s mise context resolves a package name to a different
+        Shiv checkout than the global registry, <Code>shiv update</Code> and{" "}
+        <Code>shiv list</Code> refuse and show both roots instead of reporting
+        registry state as if it described the executable package. Refresh the
+        active <Code>shiv:&lt;name&gt;</Code> tool through mise, or run the command
+        from a directory where that tool is not active.
+      </Paragraph>
+
+      <Paragraph>
+        <Code>shiv reshim</Code> regenerates shims and caches for every clean
+        registered package without moving its Git ref. Dirty, missing, or invalid
+        registered worktrees are reported and make the command fail after safe
+        packages finish; unregistered package directories are never scanned. After
+        upgrading Shiv itself, run <Code>shiv update shiv</Code> followed by{" "}
+        <Code>shiv reshim</Code> so every active package uses the new generator.
+      </Paragraph>
+
+      <Paragraph>
         You can also install directly from a local path:
       </Paragraph>
 
@@ -231,8 +253,10 @@ cd shiv && mise trust && mise install
 mise run test`}</CodeBlock>
 
       <Paragraph>
-        Tests use <Link href="https://github.com/bats-core/bats-core">BATS</Link> — the default run covers {testCount} tests
-        across {defaultTestFiles.length} suites. Completion tests run separately.
+        Tests use the <Link href="https://github.com/KnickKnackLabs/bats-core">KKL-maintained BATS fork</Link> with Rush.
+        The measured eight-job default schedules isolated tests across and within files,
+        covering {testCount} tests across {defaultTestFiles.length} suites. Use <Code>mise run test --jobs 1</Code> for serial debugging.
+        Completion tests run separately.
       </Paragraph>
     </Section>
 
