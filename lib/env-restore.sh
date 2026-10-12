@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 # Emit Bash exports for a package's explicit caller-setting declaration.
 
+source "$(dirname "${BASH_SOURCE[0]}")/caller-env.sh"
+
 shiv_restore_error() {
   printf '%s\n' 'shiv: caller_env must be an array of environment-variable names' >&2
   return 1
 }
 
 shiv_restore_caller_env() {
-  local config="$1" declaration remaining name snapshot exports=''
+  local config="$1" owner declaration remaining name snapshot exports=''
   local item_pattern='^[[:space:]]*"([A-Za-z_][A-Za-z0-9_]*)"[[:space:]]*(,|$)'
   local bracket_pattern='^[[:space:]]*\[(.*)\][[:space:]]*$'
 
@@ -24,6 +26,7 @@ shiv_restore_caller_env() {
     return 1
   fi
   remaining="${BASH_REMATCH[1]}"
+  owner=$(shiv_caller_env_owner_for_config "$config") || return 1
 
   while [[ "$remaining" != '' ]]; do
     if ! [[ "$remaining" =~ $item_pattern ]]; then
@@ -40,7 +43,7 @@ shiv_restore_caller_env() {
         ;;
     esac
 
-    snapshot="SHIV_CALLER_$name"
+    snapshot="SHIV_CALLER_VALUE_${owner}_$name"
     if [[ "${!snapshot+x}" = x ]]; then
       # %q preserves empty, multiline and shell-looking values without evaluating
       # them. Buffer until the entire declaration has passed validation.

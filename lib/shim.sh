@@ -10,6 +10,7 @@ source "$REPO_LIB_DIR/registry.sh"
 source "$REPO_LIB_DIR/cache.sh"
 source "$REPO_LIB_DIR/resolve.sh"
 source "$REPO_LIB_DIR/sources.sh"
+source "$REPO_LIB_DIR/caller-env.sh"
 
 SHIV_BIN_DIR="${SHIV_BIN_DIR:-$HOME/.local/bin}"
 SHIV_DATA_DIR="${SHIV_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/shiv}"
@@ -30,8 +31,11 @@ shiv_caller_pwd_var_name() {
 shiv_create_shim() {
   local name="$1" repo_dir="$2"
   local default_task=""
-  local caller_pwd_var task_map_quoted
+  local caller_pwd_var caller_owner package_dir directory_key task_map_quoted
   caller_pwd_var=$(shiv_caller_pwd_var_name "$name")
+  caller_owner=$(shiv_caller_env_key "$name") || return 1
+  package_dir=$(cd "$repo_dir" && pwd -P) || return 1
+  directory_key=$(shiv_caller_env_key "$package_dir") || return 1
   task_map_quoted=$(shiv_shell_quote "$SHIV_CACHE_DIR/tasks/$name")
 
   # At install time, detect a default task for single-command tools.
@@ -247,7 +251,8 @@ RESOLVE
 
 # --- main ---
 _shiv_check_repo
-shiv_snapshot_caller_env "${caller_pwd_var%CALLER_PWD}" || exit 1
+shiv_snapshot_caller_env "$caller_owner" "${caller_pwd_var%CALLER_PWD}" || exit 1
+export SHIV_CALLER_OWNER_${directory_key}="$caller_owner"
 export ${caller_pwd_var}="\$PWD"
 _shiv_check_cwd "\$@"
 
