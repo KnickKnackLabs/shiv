@@ -13,6 +13,30 @@ run_test_count() {
   [ "$output" -gt 0 ]
 }
 
+@test "test task resolves named suite directories recursively" {
+  run run_test_count shim
+  [ "$status" -eq 0 ]
+  [ "$output" -eq 40 ]
+}
+
+@test "test task resolves a nested suite name" {
+  run run_test_count shim/generation
+  [ "$status" -eq 0 ]
+  [ "$output" -eq 7 ]
+}
+
+@test "test task default discovery includes nested suites" {
+  run run_test_count --filter '^shim:'
+  [ "$status" -eq 0 ]
+  [ "$output" -eq 40 ]
+}
+
+@test "test task does not treat directory-named filter values as targets" {
+  run run_test_count --filter shim
+  [ "$status" -eq 0 ]
+  [ "$output" -ge 40 ]
+}
+
 @test "test task supports flag-only BATS filters" {
   run run_test_count --filter "sources: default index includes portl"
   [ "$status" -eq 0 ]

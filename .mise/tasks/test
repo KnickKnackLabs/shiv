@@ -66,15 +66,25 @@ for arg in ${args[@]+"${args[@]}"}; do
     continue
   fi
 
+  if [[ "$arg" != -* && -d "$TEST_DIR/$arg" ]]; then
+    resolved+=("$TEST_DIR/$arg")
+    has_target=true
+    continue
+  fi
+
   [[ "$arg" == *.bats || -d "$arg" ]] && has_target=true
   resolved+=("$arg")
 done
 
 bats_args=()
 if ! $has_target; then
-  for f in "$TEST_DIR"/*.bats; do
-    [[ "$(basename "$f" .bats)" == "$EXCLUDE" ]] && continue
-    resolved+=("$f")
+  for target in "$TEST_DIR"/*; do
+    if [ -d "$target" ]; then
+      resolved+=("$target")
+    elif [[ "$target" == *.bats ]]; then
+      [[ "$(basename "$target" .bats)" == "$EXCLUDE" ]] && continue
+      resolved+=("$target")
+    fi
   done
 
   if [ ${#args[@]} -eq 0 ]; then
@@ -82,4 +92,4 @@ if ! $has_target; then
   fi
 fi
 
-exec bats ${bats_args[@]+"${bats_args[@]}"} ${resolved[@]+"${resolved[@]}"}
+exec bats --recursive ${bats_args[@]+"${bats_args[@]}"} ${resolved[@]+"${resolved[@]}"}
