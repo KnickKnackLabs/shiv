@@ -700,28 +700,34 @@ TASK
   echo "$repo_dir"
 }
 
-@test "install: shim bakes DEFAULT_TASK when repo has matching named task" {
+@test "install: shim dispatches matching named task by default" {
   local repo_dir
   repo_dir=$(create_repo_with_named_task "calc")
   run_install "calc" "$repo_dir"
 
-  grep -q 'DEFAULT_TASK="calc"' "$SHIV_BIN_DIR/calc"
+  run "$SHIV_BIN_DIR/calc" -- "two words"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"default-task-ran:two words"* ]]
 }
 
-@test "install: shim bakes DEFAULT_TASK when repo has _default task" {
+@test "install: shim dispatches _default task without arguments" {
   local repo_dir
   repo_dir=$(create_repo_with_default_task "calc")
   run_install "calc" "$repo_dir"
 
-  grep -q 'DEFAULT_TASK="_default"' "$SHIV_BIN_DIR/calc"
+  run "$SHIV_BIN_DIR/calc"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"default-task-ran:"* ]]
 }
 
-@test "install: shim has empty DEFAULT_TASK when no matching task exists" {
+@test "install: shim dispatches explicit task when no default exists" {
   local repo_dir
   repo_dir=$(create_local_repo "myapp")
   run_install "myapp" "$repo_dir"
 
-  grep -q 'DEFAULT_TASK=""' "$SHIV_BIN_DIR/myapp"
+  run "$SHIV_BIN_DIR/myapp" hello
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"hi"* ]]
 }
 
 @test "install: named task takes precedence over _default" {
@@ -753,5 +759,7 @@ TASK
   printf 'both\tNamed task\n_default\tDefault task\n' > "$SHIV_CACHE_DIR/completions/both.cache"
 
   run_install "both" "$repo_dir"
-  grep -q 'DEFAULT_TASK="both"' "$SHIV_BIN_DIR/both"
+  run "$SHIV_BIN_DIR/both"
+  [ "$status" -eq 0 ]
+  [ "$output" = "named" ]
 }

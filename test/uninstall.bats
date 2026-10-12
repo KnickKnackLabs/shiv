@@ -210,10 +210,8 @@ MOCK
 }
 
 @test "uninstall: summary card shows not found for missing path" {
-  # Register a package pointing to a nonexistent path
-  local missing_repo="$TEST_HOME/nonexistent-repo"
-  shiv_register "gone" "$missing_repo"
-  shiv_create_shim "gone" "$missing_repo"
+  create_installed_package "gone"
+  rm -rf "$SHIV_PACKAGES_DIR/gone"
 
   run run_uninstall "gone" "true"
   [ "$status" -eq 0 ]

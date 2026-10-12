@@ -152,6 +152,31 @@ shiv_create_alias_symlinks() {
   done
 }
 
+# Compare the generated header as data, never source or eval an installed shim.
+# REPO is followed by DEFAULT_TASK in both current and legacy headers.
+shiv_shim_matches_repo() {
+  local shim_file="$1" expected_repo="$2"
+  local shim_source repo_assignment expected_assignment
+
+  shim_source=$(< "$shim_file") || return 1
+  case "$shim_source" in
+    *$'\nREPO='*$'\nDEFAULT_TASK='*) ;;
+    *) return 1 ;;
+  esac
+
+  repo_assignment=${shim_source#*$'\nREPO='}
+  repo_assignment=${repo_assignment%%$'\nDEFAULT_TASK='*}
+  expected_assignment=$(shiv_shell_quote "$expected_repo") || return 1
+  [ "$repo_assignment" = "$expected_assignment" ] && return 0
+
+  # Old generators used unescaped double quotes. Accept only paths that were
+  # literal in that format, not shell expansions or prematurely closed quotes.
+  case "$expected_repo" in
+    *[\"\$\`\\]*) return 1 ;;
+  esac
+  [ "$repo_assignment" = "\"$expected_repo\"" ]
+}
+
 # Quote a value for POSIX-ish shell eval output.
 shiv_shell_quote() {
   printf "'"
