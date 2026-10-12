@@ -12,11 +12,16 @@ needed. During shim generation, Shiv writes a self-contained Bash file and an
 additional TOML config under its cache. Mise executes that Bash file while
 constructing the package environment and retains its exports.
 
-Precedence is deliberate:
+Declared caller settings replace package defaults. Avoid relying on
+`mise.local.toml` to override the same restored setting: precedence depends on
+Mise's environment-resolution phase and task form.
 
-1. Package defaults and existing package source hooks.
-1. Declared caller settings with a captured value.
-1. The package's `mise.local.toml` overrides, including its source hooks.
+On Mise 2026.10.8 on macOS, the generated hook's `tools = true` setting allows
+ordinary local values to win for inline TOML tasks, but restored caller values
+win for executable task files and `mise exec`. Marking the local value itself
+`tools = true` made it win in all three tested forms. This is an observed caveat,
+not a cross-version precedence guarantee; the restoration implementation is
+unchanged.
 
 An empty caller value replaces a default with an empty value. An absent value
 leaves the default unchanged. Undeclared settings are not restored. Package tool
@@ -88,10 +93,13 @@ the automatic hook, a missing declaration is an error for this explicit command.
 Do not log its output: it may contain credentials.
 
 Fictional tests against Mise 2026.10.8 on macOS cover generated-only restoration,
-actual caller Mise handoff, empty and multiline values, local precedence,
-existing source composition, nested name collisions, missing artifacts, narrow
-trust and failed assembly. Linux parity and cold released-consumer bootstrap are
-not established by these tests. Secrets adoption remains a separate decision.
+actual caller Mise handoff, empty and multiline values, inline-task local
+precedence, existing source composition, nested name collisions, missing
+artifacts, narrow trust and failed assembly. A separate real backend consumer
+proof passed installation and restoration through an executable task file;
+a standalone matrix reproduced the task-form precedence caveat above.
+Linux parity and cold released-consumer bootstrap are not established by these
+tests. Secrets adoption remains a separate decision.
 
 Handoff variables and generated files are not a security boundary against code
 running as the same OS user. Existing installed shims do not change until they
