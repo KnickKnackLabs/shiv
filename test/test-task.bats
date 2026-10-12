@@ -14,9 +14,11 @@ run_test_count() {
 }
 
 @test "test task resolves named suite directories recursively" {
+  local expected_count
+  expected_count=$(bats --recursive --count "$REPO_DIR/test/shim")
   run run_test_count shim
   [ "$status" -eq 0 ]
-  [ "$output" -eq 40 ]
+  [ "$output" -eq "$expected_count" ]
 }
 
 @test "test task resolves a nested suite name" {

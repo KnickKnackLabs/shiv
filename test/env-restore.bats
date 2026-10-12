@@ -111,6 +111,28 @@ restore() {
   [[ "$output" != *'export MYAPP_PROVIDER='* ]]
 }
 
+@test "env restore: optional absence recognizes only Mise's missing-key diagnostic" {
+  source "$REPO_DIR/lib/env-restore.sh"
+  export MISE_BIN="$BATS_TEST_TMPDIR/mise-read-failure"
+  cat > "$MISE_BIN" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "$READ_FAILURE" >&2
+exit 1
+SH
+  chmod +x "$MISE_BIN"
+  export READ_FAILURE="mise ERROR Key not found: _.shiv.caller_env in $PACKAGE/mise.toml"
+  run shiv_read_caller_declaration "$PACKAGE/mise.toml" true
+  [ "$status" -eq 0 ]
+  [ "$output" = '[]' ]
+
+  for READ_FAILURE in 'mise ERROR permission denied' 'mise ERROR invalid TOML' 'unexpected failure'; do
+    export READ_FAILURE
+    run shiv_read_caller_declaration "$PACKAGE/mise.toml" true
+    [ "$status" -ne 0 ]
+    [ "$output" = "$READ_FAILURE" ]
+  done
+}
+
 prepare_real_shims() {
   source "$REPO_DIR/lib/shim.sh"
   export SHIV_BIN_DIR="$BATS_TEST_TMPDIR/bin"
@@ -195,7 +217,7 @@ eval "$exports"
 test "$MY_TOOL_PROVIDER" = "original outer caller"
 exports=$("$RESTORE_SHIV" env restore "$INNER_CONFIG")
 eval "$exports"
-test "$MY_TOOL_PROVIDER" = "outer default"
+test "$MY_TOOL_PROVIDER" = "original outer caller"
 '''
 TOML
   # Both configs declare the same setting; their generated shims must bind

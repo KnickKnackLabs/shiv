@@ -11,6 +11,7 @@ source "$REPO_LIB_DIR/cache.sh"
 source "$REPO_LIB_DIR/resolve.sh"
 source "$REPO_LIB_DIR/sources.sh"
 source "$REPO_LIB_DIR/caller-env.sh"
+source "$REPO_LIB_DIR/shim-restoration.sh"
 
 SHIV_BIN_DIR="${SHIV_BIN_DIR:-$HOME/.local/bin}"
 SHIV_DATA_DIR="${SHIV_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/shiv}"
@@ -62,8 +63,41 @@ shiv_create_shim() {
   fi
 
   mkdir -p "$SHIV_BIN_DIR" || return 1
-  local shim_tmp
+  # Mise separates trusted paths with colons. Refuse an ambiguous cache path
+  # instead of accidentally trusting a shorter, unrelated prefix.
+  case "$SHIV_CACHE_DIR" in
+    *:*) printf '%s\n' 'shiv: shim cache path cannot contain a colon' >&2; return 1 ;;
+  esac
+
+  local shim_tmp restoration_root restoration_dir
   shim_tmp=$(mktemp "$SHIV_BIN_DIR/.${name}.XXXXXX") || return 1
+
+  # These artifacts contain only source and paths. Private directories prevent
+  # another OS user from replacing code that the shim asks Mise to trust.
+  if ! (umask 077; mkdir -p "$SHIV_CACHE_DIR/shim-env"); then
+    rm -f "$shim_tmp"
+    return 1
+  fi
+  restoration_root=$(cd "$SHIV_CACHE_DIR/shim-env" && pwd -P) || {
+    rm -f "$shim_tmp"
+    return 1
+  }
+  case "$restoration_root" in
+    *:*)
+      printf '%s\n' 'shiv: shim cache path cannot contain a colon' >&2
+      rm -f "$shim_tmp"
+      return 1
+      ;;
+  esac
+  restoration_dir=$(mktemp -d "$restoration_root/${caller_owner}.XXXXXX") || {
+    rm -f "$shim_tmp"
+    return 1
+  }
+  if ! shiv_create_restoration "$package_dir" "$restoration_dir" "$caller_owner"; then
+    rm -f "$shim_tmp"
+    rm -rf "$restoration_dir"
+    return 1
+  fi
 
   # Assemble beside the destination so a failed read cannot replace a working shim.
   # The installed shim never reads these source files at runtime.
@@ -75,6 +109,7 @@ shiv_create_shim() {
     printf 'HAS_TASKS_TASK=%s\n' "$(shiv_shell_quote "$has_tasks_task")" &&
     printf 'HAS_HELP_TASK=%s\n' "$(shiv_shell_quote "$has_help_task")" &&
     printf 'SHIV_TASK_MAP=%s\n' "$task_map_quoted" &&
+    printf 'SHIV_RESTORATION_CONFIG=%s\n' "$(shiv_shell_quote "$restoration_dir/restore.toml")" &&
     printf 'SHIV_CALLER_OWNER=%s\n' "$(shiv_shell_quote "$caller_owner")" &&
     printf 'SHIV_DIRECTORY_KEY=%s\n' "$(shiv_shell_quote "$directory_key")" &&
     printf 'SHIV_CALLER_PWD_VAR=%s\n' "$(shiv_shell_quote "$caller_pwd_var")" &&
@@ -87,11 +122,14 @@ shiv_create_shim() {
     shiv_embed_shim_source "$REPO_LIB_DIR/shim-runtime/dispatch.sh"
   } > "$shim_tmp"; then
     rm -f "$shim_tmp"
+    rm -rf "$restoration_dir"
     return 1
   fi
 
-  if ! chmod 755 "$shim_tmp" || ! mv -f "$shim_tmp" "$SHIV_BIN_DIR/$name"; then
+  if ! chmod 400 "$restoration_dir/restore.sh" "$restoration_dir/restore.toml" ||
+    ! chmod 755 "$shim_tmp" || ! mv -f "$shim_tmp" "$SHIV_BIN_DIR/$name"; then
     rm -f "$shim_tmp"
+    rm -rf "$restoration_dir"
     return 1
   fi
 }

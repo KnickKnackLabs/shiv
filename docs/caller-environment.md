@@ -1,7 +1,32 @@
-# Caller environment snapshots
+# Caller settings
 
-Generated shims snapshot exported variables in the package's sanitized uppercase
-setting namespace before entering package Mise. Snapshot ownership uses the full
+Packages declare the caller settings they accept in their main Mise config:
+
+```toml
+[_.shiv]
+caller_env = ["MYAPP_PROVIDER", "MYAPP_CONFIG"]
+```
+
+No package-owned restoration script or helper-only Shiv runtime dependency is
+needed. During shim generation, Shiv writes a self-contained Bash file and an
+additional TOML config under its cache. Mise executes that Bash file while
+constructing the package environment and retains its exports.
+
+Precedence is deliberate:
+
+1. Package defaults and existing package source hooks.
+1. Declared caller settings with a captured value.
+1. The package's `mise.local.toml` overrides, including its source hooks.
+
+An empty caller value replaces a default with an empty value. An absent value
+leaves the default unchanged. Undeclared settings are not restored. Package tool
+selection and PATH remain Mise-owned; Shiv does not unset `__MISE_DIFF` or carry
+across the entire caller environment.
+
+## Snapshots and nested calls
+
+Before entering package Mise, generated shims snapshot exported variables in the
+package's sanitized uppercase setting namespace. Snapshot ownership uses the full
 original package name, encoded byte-for-byte as lowercase hexadecimal. For example,
 `my-tool` snapshots `MY_TOOL_PROVIDER` as
 `SHIV_CALLER_VALUE_6d792d746f6f6c_MY_TOOL_PROVIDER`.
@@ -10,51 +35,64 @@ Every invocation clears only that exact owner's snapshots, then copies current
 values exactly, including empty values and newlines. Unexported shell variables
 are not inputs. Other packages' snapshots remain available for nested calls.
 `my`, `my-tool` and `my_tool` have distinct owners even though their setting
-prefixes overlap or sanitize identically. The setting names themselves do not change.
-Reserved `SHIV_CALLER_*` handoff variables are never themselves snapshotted.
-The shim refreshes `<PACKAGE>_CALLER_PWD` separately; it is not a caller setting.
+prefixes overlap or sanitize identically. Reserved `SHIV_CALLER_*` variables are
+never snapshotted. The shim refreshes `<PACKAGE>_CALLER_PWD` separately.
 
-Snapshots are transport, not restoration. Mise still owns package environment
-and tool selection. Consumers declare which settings to restore:
+Each shim also binds its physical package directory to its owner through
+`SHIV_CALLER_OWNER_<encoded-directory>`. Restoration selects that directory's
+owner rather than guessing from a folder name or using the most recently invoked
+tool. When multiple package names share one physical directory, its latest
+invocation selects the active owner.
 
-```toml
-[_.shiv]
-caller_env = ["MYAPP_PROVIDER", "MYAPP_CONFIG"]
+At every package handoff, the shim replaces inherited
+`MISE_DEFAULT_CONFIG_FILENAME` with its own generated config and scrubs
+`MISE_OVERRIDE_CONFIG_FILENAMES`. Nested calls therefore use their own declaration
+and restoration file. Existing package source hooks still run; no package hook
+needs to invoke Shiv.
 
-[env]
-_.source = { path = "scripts/caller-env.sh", tools = true }
-```
+## Generated files and trust
 
-The consuming package's `scripts/caller-env.sh` uses the Shiv helper:
+Each shim revision gets a unique private directory under
+`$SHIV_CACHE_DIR/shim-env`. The files contain only source code and paths, never
+caller values. They are read-only after generation. The shim and its artifacts
+are independent of Shiv's source checkout at runtime.
 
-```bash
-#!/usr/bin/env bash
-package_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd) || exit 1
-exports=$(shiv env restore "$package_dir/mise.toml") || exit 1
-eval "$exports"
-```
+Generation assembles the files before atomically replacing the executable shim.
+On failure, it removes only its new files and preserves the old shim. Successful
+regeneration retains older artifacts so an already-running shim can finish.
+There is no automatic garbage collection in this implementation. Removing these
+files requires regenerating any shim that still references them; missing or
+unreadable artifacts fail the call rather than silently using package defaults.
 
-Declare Shiv as a runtime dependency so that `shiv` is available to this hook.
-The helper reads the exact stored declaration through `mise config get`; the
-config path must be absolute. Each generated shim also binds its physical package
-directory to its encoded owner through `SHIV_CALLER_OWNER_<encoded-directory>`.
-The helper resolves the consuming config's directory to select that owner, rather
-than using the most recently called tool's name or guessing from a folder name.
-For multiple names installed from one directory, the most recent invocation of
-that directory selects its active owner. Missing or malformed owner bindings fail
-closed; legacy unowned snapshots are not used.
+The shim adds only its exact generated TOML file to `MISE_TRUSTED_CONFIG_PATHS`,
+retaining any existing operator-provided paths. It does not persist a trust grant
+or trust the package directory. Mise's normal package trust policy remains in
+force; paranoid-mode tests verify that the generated grant does not trust an
+unrelated local config. Cache paths containing a colon are refused because Mise
+uses colons to separate trusted paths.
 
-It emits Bash-quoted exports only for declared settings with that owner's
-snapshots. Empty values are restored; absent snapshots leave the
-package environment unchanged. Invalid declarations and reserved handoff or
-caller-directory names fail before any export is emitted.
+The declaration is read at invocation time from the package's main config
+(`mise.toml`, with `.mise.toml`, `.mise/config.toml` and
+`.config/mise/config.toml` as fallbacks). A missing `caller_env` declaration is a
+no-op. Only Mise's specific missing-key diagnostic is accepted as absence;
+other read failures, malformed declarations and reserved variable names fail
+closed. A package with no main config at generation time gets a no-op hook;
+regenerate its shim after adding a config.
 
-The hook and public helper were tested with fictional values against Mise
-2026.9.12. Generated-shim tests cover shorter prefixes and sanitized-name
-collisions; nested Mise task tests restore each consuming directory's owner through
-the public helper. Cold dependency bootstrap and broader nested consumer behavior
-still need proof before adoption in Secrets.
+## Public helper and evidence
 
-Do not log snapshots or dump environments: values may contain credentials.
-Handoff variables are not a security boundary against code running as the same
-OS user. Existing installed shims are unchanged until deliberately regenerated.
+`shiv env restore /absolute/path/to/mise.toml` remains available for explicit
+integrations. It emits Bash-quoted exports, buffers them until the complete
+declaration validates, and requires an owner bound by a generated shim. Unlike
+the automatic hook, a missing declaration is an error for this explicit command.
+Do not log its output: it may contain credentials.
+
+Fictional tests against Mise 2026.10.8 on macOS cover generated-only restoration,
+actual caller Mise handoff, empty and multiline values, local precedence,
+existing source composition, nested name collisions, missing artifacts, narrow
+trust and failed assembly. Linux parity and cold released-consumer bootstrap are
+not established by these tests. Secrets adoption remains a separate decision.
+
+Handoff variables and generated files are not a security boundary against code
+running as the same OS user. Existing installed shims do not change until they
+are deliberately regenerated.

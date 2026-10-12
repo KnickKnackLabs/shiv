@@ -19,13 +19,30 @@ _shiv_check_cwd() {
   fi
 }
 
-_shiv_package_tasks_json() {
+_shiv_select_package_config() {
+  local artifact
+  for artifact in "$SHIV_RESTORATION_CONFIG" "${SHIV_RESTORATION_CONFIG%/*}/restore.sh"; do
+    if [ ! -f "$artifact" ] || [ ! -r "$artifact" ] || [ -L "$artifact" ]; then
+      printf '%s\n' "$SHIV_PACKAGE_NAME: generated restoration artifact is missing or unreadable; regenerate the shim" >&2
+      return 1
+    fi
+  done
+
   unset MISE_OVERRIDE_CONFIG_FILENAMES
+
+  # Replace the outer package's selection on every handoff. This adds the
+  # generated hook between package defaults and package-local overrides.
+  export MISE_DEFAULT_CONFIG_FILENAME="$SHIV_RESTORATION_CONFIG"
+  export MISE_TRUSTED_CONFIG_PATHS="$SHIV_RESTORATION_CONFIG${MISE_TRUSTED_CONFIG_PATHS:+:$MISE_TRUSTED_CONFIG_PATHS}"
+}
+
+_shiv_package_tasks_json() {
+  _shiv_select_package_config || return 1
   mise tasks --json "$@" -C "$REPO" 2>/dev/null
 }
 
 _shiv_exec_package_mise() {
-  unset MISE_OVERRIDE_CONFIG_FILENAMES
+  _shiv_select_package_config || exit 1
   exec mise -C "$REPO" "$@"
 }
 

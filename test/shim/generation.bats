@@ -6,7 +6,7 @@ load helpers
 assert_assembly_preserves_shim() {
   local failure="$1" caller_mode="$2" fragment
 
-  for fragment in package-tasks.sh dispatch.sh; do
+  for fragment in shim-runtime/package-tasks.sh shim-runtime/dispatch.sh caller-env.sh env-restore.sh; do
     local fixture="$TEST_HOME/assembly-$failure-$caller_mode-$fragment"
     mkdir -p "$fixture/bin" "$fixture/package"
     cp -R "$REPO_DIR/lib" "$fixture/lib"
@@ -14,7 +14,7 @@ assert_assembly_preserves_shim() {
     chmod +x "$fixture/bin/myapp"
     cp "$fixture/bin/myapp" "$fixture/original"
 
-    local source_file="$fixture/lib/shim-runtime/$fragment"
+    local source_file="$fixture/lib/$fragment"
     if [ "$failure" = missing ]; then
       rm "$source_file"
     fi
@@ -23,6 +23,7 @@ assert_assembly_preserves_shim() {
       ASSEMBLY_SOURCE="$source_file" ASSEMBLY_CALLER="$caller_mode" bash -c '
       source "$ASSEMBLY_FIXTURE/lib/shim.sh"
       SHIV_BIN_DIR="$ASSEMBLY_FIXTURE/bin"
+      SHIV_CACHE_DIR="$ASSEMBLY_FIXTURE/cache"
 
       # Inject a partial read failure even when permission tests would be unreliable.
       sed() {
@@ -55,6 +56,12 @@ assert_assembly_preserves_shim() {
     run find "$fixture/bin" -name '.myapp.*'
     [ "$status" -eq 0 ]
     [ -z "$output" ]
+
+    if [ -d "$fixture/cache/shim-env" ]; then
+      run find "$fixture/cache/shim-env" -mindepth 1
+      [ "$status" -eq 0 ]
+      [ -z "$output" ]
+    fi
   done
 }
 
