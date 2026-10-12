@@ -49,7 +49,9 @@ SEP='|'
 # Build table rows: PACKAGE | ALIASES | REF | BRANCH | VERSION | UPDATED
 # Each row is prefixed with unix timestamp (tab-separated) for sort-by-updated
 rows=()
+registry_entries=$(shiv_registry_entries) || exit 1
 while IFS=$'\t' read -r name repo ref; do
+  [ -n "$name" ] || continue
   aliases=$(shiv_registry_aliases "$name" | paste -sd, -)
 
   # Git metadata (gracefully handle missing/non-git repos)
@@ -72,7 +74,7 @@ while IFS=$'\t' read -r name repo ref; do
   fi
 
   rows+=("${timestamp}	${name}${SEP}${aliases:--}${SEP}${ref:--}${SEP}${branch}${SEP}${version}${SEP}${updated}")
-done < <(shiv_registry_entries)
+done <<< "$registry_entries"
 
 # Sort rows
 case "$SORT_FIELD" in

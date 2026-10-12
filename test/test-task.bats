@@ -28,6 +28,25 @@ write_passing_test() {
   [[ "$output" == *'ok 1 sources: default index includes portl'* ]]
 }
 
+@test "an explicit directory discovers nested test files recursively" {
+  local target="$BATS_TEST_TMPDIR/nested-suite"
+  write_passing_test "$target/child/passing.bats" 'nested target only'
+
+  run shiv test --jobs 1 "$target"
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'1..1'* ]]
+  [[ "$output" == *'ok 1 nested target only'* ]]
+}
+
+@test "options-only calls discover the split shim suites recursively" {
+  run shiv test --jobs 1 --filter '^shim: package-specific caller var reflects actual cwd$'
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'1..1'* ]]
+  [[ "$output" == *'ok 1 shim: package-specific caller var reflects actual cwd'* ]]
+}
+
 @test "an explicit test target takes precedence over the configured default" {
   local target="$BATS_TEST_TMPDIR/explicit.bats"
   write_passing_test "$target" 'explicit target only'

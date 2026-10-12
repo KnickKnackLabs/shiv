@@ -150,11 +150,14 @@ EOF
 }
 
 # Emit a completion function for each registered tool
-shiv_registry_entries | while IFS=$'\t' read -r name repo; do
+registry_entries=$(shiv_registry_entries) || exit 1
+while IFS=$'\t' read -r name repo; do
+  [ -n "$name" ] || continue
   _shiv_emit_zsh_completion "$name" "$name" "$repo"
 
+  alias_output=$(shiv_registry_aliases "$name") || exit 1
   while IFS= read -r alias; do
     [ -n "$alias" ] || continue
     _shiv_emit_zsh_completion "$alias" "$name" "$repo"
-  done < <(shiv_registry_aliases "$name")
-done
+  done <<< "$alias_output"
+done <<< "$registry_entries"

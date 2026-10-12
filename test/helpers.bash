@@ -45,3 +45,8 @@ MOCK
 use_real_gum() {
   rm -f "$BATS_TEST_TMPDIR/mock-bin/gum"
 }
+
+# Public routing into copied tasks whose registry producers inject failures.
+shiv_input_fixture() {
+  mise -C "$INPUT_FIXTURE" run -q "$@"
+}

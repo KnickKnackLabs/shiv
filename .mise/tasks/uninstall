@@ -35,11 +35,13 @@ if [ "$NAME" = "shiv" ] && [ "$FORCE" != "true" ]; then
     echo "  Can't uninstall shiv — $OTHER_COUNT package(s) still installed:"
     echo ""
 
+    registry_entries=$(shiv_registry_entries) || exit 1
     while IFS=$'\t' read -r pkg_name pkg_path; do
+      [ -n "$pkg_name" ] || continue
       if [ "$pkg_name" != "shiv" ]; then
         printf '%s\n' "${pkg_name}${SEP}${pkg_path}"
       fi
-    done < <(shiv_registry_entries) | gum table -s "$SEP" -c "PACKAGE,PATH" -p --border normal
+    done <<< "$registry_entries" | gum table -s "$SEP" -c "PACKAGE,PATH" -p --border normal
 
     echo ""
     gum style --faint "  Use --force to uninstall shiv anyway."
@@ -50,9 +52,10 @@ fi
 # Gather metadata for summary card
 TOOL_PATH=$(shiv_registry_path "$NAME")
 ALIASES=()
+alias_output=$(shiv_registry_aliases "$NAME") || exit 1
 while IFS= read -r _alias; do
   [ -n "$_alias" ] && ALIASES+=("$_alias")
-done < <(shiv_registry_aliases "$NAME")
+done <<< "$alias_output"
 
 # Annotate PATH and SHIM with "(not found)" if missing
 path_display="${TOOL_PATH:--}"

@@ -112,6 +112,7 @@ run_which_from() {
   local mise_repo="$TEST_HOME/path with apostrophe' and \$cash and \`tick\` and \"quote\" and \\slash/alpha"
   local mise_executable="$TEST_HOME/mise-bin/alpha"
 
+  mkdir -p "$mise_repo"
   SHIV_BIN_DIR="$(dirname "$mise_executable")" shiv_create_shim "alpha" "$mise_repo"
 
   export FAKE_MISE_CWD="$caller_dir"

@@ -10,6 +10,8 @@ source "$REPO_LIB_DIR/registry.sh"
 source "$REPO_LIB_DIR/cache.sh"
 source "$REPO_LIB_DIR/resolve.sh"
 source "$REPO_LIB_DIR/sources.sh"
+source "$REPO_LIB_DIR/caller-env.sh"
+source "$REPO_LIB_DIR/shim-restoration.sh"
 
 SHIV_BIN_DIR="${SHIV_BIN_DIR:-$HOME/.local/bin}"
 SHIV_DATA_DIR="${SHIV_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/shiv}"
@@ -154,9 +156,12 @@ shiv_caller_pwd_var_name() {
 shiv_create_shim() {
   local name="$1" repo_dir="$2"
   local default_task=""
-  local caller_pwd_var repo_escaped task_map_quoted
+  local caller_pwd_var caller_owner package_dir directory_key task_map_quoted repo_escaped
   caller_pwd_var=$(shiv_caller_pwd_var_name "$name")
-  repo_escaped=$(shiv_double_quote_escape "$repo_dir")
+  caller_owner=$(shiv_caller_env_key "$name") || return 1
+  package_dir=$(cd "$repo_dir" && pwd -P) || return 1
+  directory_key=$(shiv_caller_env_key "$package_dir") || return 1
+  repo_escaped=$(shiv_double_quote_escape "$repo_dir") || return 1
   task_map_quoted=$(shiv_shell_quote "$SHIV_CACHE_DIR/tasks/$name")
 
   # At install time, detect a default task for single-command tools.
@@ -182,299 +187,84 @@ shiv_create_shim() {
     has_help_task="true"
   fi
 
-  mkdir -p "$SHIV_BIN_DIR"
+  mkdir -p "$SHIV_BIN_DIR" || return 1
+  # Mise separates trusted paths with colons. Refuse an ambiguous cache path
+  # instead of accidentally trusting a shorter, unrelated prefix.
+  case "$SHIV_CACHE_DIR" in
+    *:*) printf '%s\n' 'shiv: shim cache path cannot contain a colon' >&2; return 1 ;;
+  esac
 
-  # Build the shim in three parts:
-  # 1. Header + config (expanded heredoc — bakes in install-time values)
-  # 2. Embedded resolver (quoted heredoc — no expansion, verbatim from lib/resolve.sh)
-  # 3. Runtime logic (expanded heredoc — references both baked config and runtime vars)
+  local shim_tmp restoration_root restoration_dir
+  shim_tmp=$(mktemp "$SHIV_BIN_DIR/.${name}.XXXXXX") || return 1
 
-  # Part 1: shebang, config, and helper functions
-  cat > "$SHIV_BIN_DIR/$name" <<SCRIPT
-#!/usr/bin/env bash
-# managed by shiv
-REPO="$repo_escaped"
-DEFAULT_TASK="${default_task}"
-HAS_TASKS_TASK="${has_tasks_task}"
-HAS_HELP_TASK="${has_help_task}"
-SHIV_TASK_MAP=$task_map_quoted
-
-_shiv_check_repo() {
-  if [ ! -d "\$REPO" ]; then
-    echo "$name: repo not found at \$REPO" >&2
-    echo "$name: run 'shiv doctor' to diagnose" >&2
-    exit 1
+  # These artifacts contain only source and paths. Private directories prevent
+  # another OS user from replacing code that the shim asks Mise to trust.
+  if ! (umask 077; mkdir -p "$SHIV_CACHE_DIR/shim-env"); then
+    rm -f "$shim_tmp"
+    return 1
   fi
-}
-
-_shiv_check_cwd() {
-  if [ "\$(basename "\$PWD")" = "$name" ] && [ "\$PWD" != "\$REPO" ]; then
-    echo "$name: warning: you're in a directory called '$name' but running the shiv-installed copy" >&2
-    echo "$name: shiv package: \$REPO" >&2
-    echo "$name: current dir: \$PWD" >&2
-    echo "$name: to run from this directory instead: mise run \$*" >&2
-    echo "" >&2
-  fi
-}
-
-_shiv_package_tasks_json() {
-  unset MISE_OVERRIDE_CONFIG_FILENAMES
-  mise tasks --json "\$@" -C "\$REPO" 2>/dev/null
-}
-
-_shiv_exec_package_mise() {
-  unset MISE_OVERRIDE_CONFIG_FILENAMES
-  exec mise -C "\$REPO" "\$@"
-}
-
-# NOTE: the task-map transformation duplicates shiv_cache_task_map() in
-# lib/cache.sh (shim self-containment). If you change package-task cache
-# invariants, update both places: scrub caller-scoped mise config overrides and
-# exclude global mise tasks.
-_shiv_ensure_task_map() {
-  [ -f "\$SHIV_TASK_MAP" ] && return 0
-  if ! command -v jq >/dev/null 2>&1; then
-    echo "$name: warning: jq not found, space-to-colon resolution disabled" >&2
-    return 0
-  fi
-  mkdir -p "\$(dirname "\$SHIV_TASK_MAP")"
-  local tmp="\$SHIV_TASK_MAP.tmp"
-  local tasks_json
-  if ! tasks_json=\$(_shiv_package_tasks_json --hidden); then
-    rm -f "\$tmp"
-    return 0
-  fi
-  if [ -z "\$tasks_json" ]; then
-    rm -f "\$tmp"
-    return 0
-  fi
-  if ! printf '%s\n' "\$tasks_json" \\
-    | jq -r '.[] | select(.global != true) | .name | gsub(":"; " ")' > "\$tmp" 2>/dev/null; then
-    rm -f "\$tmp"
-    return 0
-  fi
-
-  if [ -s "\$tmp" ]; then
-    mv "\$tmp" "\$SHIV_TASK_MAP"
-  else
-    rm -f "\$tmp"
-  fi
-}
-
-_shiv_render_tasks_plain() {
-  awk -F '\t' '{ printf "%-12s  %-24s  %-16s  %s\n", \$1, \$2, \$3, \$4 }'
-}
-
-_shiv_render_tasks() {
-  if ! command -v jq >/dev/null 2>&1; then
-    echo "$name: jq not found, cannot render package-local task list" >&2
+  restoration_root=$(cd "$SHIV_CACHE_DIR/shim-env" && pwd -P) || {
+    rm -f "$shim_tmp"
+    return 1
+  }
+  case "$restoration_root" in
+    *:*)
+      printf '%s\n' 'shiv: shim cache path cannot contain a colon' >&2
+      rm -f "$shim_tmp"
+      return 1
+      ;;
+  esac
+  restoration_dir=$(mktemp -d "$restoration_root/${caller_owner}.XXXXXX") || {
+    rm -f "$shim_tmp"
+    return 1
+  }
+  if ! shiv_create_restoration "$package_dir" "$restoration_dir" "$caller_owner"; then
+    rm -f "$shim_tmp"
+    rm -rf "$restoration_dir"
     return 1
   fi
 
-  local tmp repo_prefix tasks_json
-  tmp=\$(mktemp)
-  repo_prefix="\$(cd "\$REPO" && pwd -P)/"
-  if ! tasks_json=\$(_shiv_package_tasks_json --local); then
-    rm -f "\$tmp"
-    echo "$name: failed to render package-local task list" >&2
+  # Assemble beside the destination so a failed read cannot replace a working shim.
+  # The installed shim never reads these source files at runtime.
+  if ! {
+    printf '%s\n' '#!/usr/bin/env bash' '# managed by shiv' &&
+    printf 'SHIV_PACKAGE_NAME=%s\n' "$(shiv_shell_quote "$name")" &&
+    printf 'REPO="%s"\n' "$repo_escaped" &&
+    printf 'DEFAULT_TASK=%s\n' "$(shiv_shell_quote "$default_task")" &&
+    printf 'HAS_TASKS_TASK=%s\n' "$(shiv_shell_quote "$has_tasks_task")" &&
+    printf 'HAS_HELP_TASK=%s\n' "$(shiv_shell_quote "$has_help_task")" &&
+    printf 'SHIV_TASK_MAP=%s\n' "$task_map_quoted" &&
+    printf 'SHIV_RESTORATION_CONFIG=%s\n' "$(shiv_shell_quote "$restoration_dir/restore.toml")" &&
+    printf 'SHIV_CALLER_OWNER=%s\n' "$(shiv_shell_quote "$caller_owner")" &&
+    printf 'SHIV_DIRECTORY_KEY=%s\n' "$(shiv_shell_quote "$directory_key")" &&
+    printf 'SHIV_CALLER_PWD_VAR=%s\n' "$(shiv_shell_quote "$caller_pwd_var")" &&
+    printf 'SHIV_SETTING_PREFIX=%s\n' "$(shiv_shell_quote "${caller_pwd_var%CALLER_PWD}")" &&
+    printf '\n' &&
+
+    shiv_embed_shim_source "$REPO_LIB_DIR/shim-runtime/package-tasks.sh" &&
+    shiv_embed_shim_source "$REPO_LIB_DIR/resolve.sh" &&
+    shiv_embed_shim_source "$REPO_LIB_DIR/caller-env.sh" &&
+    shiv_embed_shim_source "$REPO_LIB_DIR/shim-runtime/dispatch.sh"
+  } > "$shim_tmp"; then
+    rm -f "$shim_tmp"
+    rm -rf "$restoration_dir"
     return 1
   fi
-  if ! printf '%s\n' "\$tasks_json" \
-    | jq -r --arg repo_prefix "\$repo_prefix" '[.[] | select(.hide != true) | select(((.source // .file // "") | startswith(\$repo_prefix))) | (.name | split(":")) as \$p | {
-        group: (if (\$p | length) > 1 then \$p[0] else "root" end),
-        task: (if (\$p | length) > 1 then (\$p[1:] | join(":")) else .name end),
-        aliases: ((.aliases // []) | join(", ")),
-        description: (.description // "")
-      }]
-      | sort_by((if .group == "root" then "" else .group end), .task)
-      | .[]
-      | [.group, .task, .aliases, .description]
-      | @tsv' > "\$tmp" 2>/dev/null; then
-    rm -f "\$tmp"
-    echo "$name: failed to render package-local task list" >&2
+
+  if ! chmod 400 "$restoration_dir/restore.sh" "$restoration_dir/restore.toml" ||
+    ! chmod 755 "$shim_tmp" || ! mv -f "$shim_tmp" "$SHIV_BIN_DIR/$name"; then
+    rm -f "$shim_tmp"
+    rm -rf "$restoration_dir"
     return 1
   fi
-
-  if [ ! -s "\$tmp" ]; then
-    rm -f "\$tmp"
-    echo "No local tasks found."
-    return 0
-  fi
-
-  if command -v gum >/dev/null 2>&1 && [ -t 1 ]; then
-    {
-      printf 'Group\tTask\tAliases\tDescription\n'
-      cat "\$tmp"
-    } | gum table --print --separator \$'\t' --border rounded
-  else
-    {
-      printf 'Group\tTask\tAliases\tDescription\n'
-      cat "\$tmp"
-    } | _shiv_render_tasks_plain
-  fi
-
-  rm -f "\$tmp"
 }
 
-_shiv_handle_tasks() {
-  if [ "\$HAS_TASKS_TASK" = "true" ]; then
-    _shiv_exec_package_mise run -q "\$@"
-  fi
-  _shiv_render_tasks
-  local rc=\$?
-  echo "" >&2
-  echo "To override this output, create .mise/tasks/tasks in the package and reinstall." >&2
-  exit \$rc
-}
-
-_shiv_handle_help() {
-  local help_arg="\${1:-help}"
-
-  # Package-owned help wins. This lets tools expose richer help than the
-  # generic mise task list while keeping the shim-level interception.
-  if [ "\$HAS_HELP_TASK" = "true" ]; then
-    _shiv_exec_package_mise run -q help
-  fi
-
-  # Single-command tools (.mise/tasks/<name>) should show the command help,
-  # not the package task list. Do not do this for _default: those are often
-  # menus/catch-alls where task-list help is still the safer default.
-  if [ -n "\$DEFAULT_TASK" ] && [ "\$DEFAULT_TASK" != "_default" ]; then
-    if [ "\$help_arg" = "help" ]; then
-      _shiv_exec_package_mise run -q "\$DEFAULT_TASK" help
-    else
-      _shiv_exec_package_mise run -q "\$DEFAULT_TASK" "\$help_arg"
-    fi
-  fi
-
-  _shiv_handle_tasks tasks
-}
-
-_shiv_handle_version() {
-  local version branch updated git_prefix git_var
-
-  # Git exports repository-selection variables to hooks. Clear them before
-  # inspecting the package so caller metadata cannot override git -C.
-  while IFS= read -r git_var; do
-    [ -n "\$git_var" ] && unset "\$git_var"
-  done < <(git rev-parse --local-env-vars 2>/dev/null)
-
-  # git -C searches parent directories. Require the package itself to be the
-  # worktree root so a non-Git local package cannot inherit unrelated metadata.
-  if ! git_prefix=\$(git -C "\$REPO" rev-parse --show-prefix 2>/dev/null) || [ -n "\$git_prefix" ]; then
-    version="unknown"
-  elif ! version=\$(git -C "\$REPO" describe --tags --exact-match HEAD 2>/dev/null); then
-    version=\$(git -C "\$REPO" rev-parse --short HEAD 2>/dev/null || printf 'unknown')
-  fi
-
-  if [ "\$version" = "unknown" ]; then
-    branch="unknown"
-    updated="unknown"
-  else
-    if [ -n "\$(git -C "\$REPO" status --porcelain 2>/dev/null)" ]; then
-      version="\${version}*"
-    fi
-    branch=\$(git -C "\$REPO" symbolic-ref --quiet --short HEAD 2>/dev/null || printf 'detached')
-    updated=\$(git -C "\$REPO" log -1 --format='%cd' --date=relative 2>/dev/null || printf 'unknown')
-  fi
-
-  printf '%s %s (branch: %s, updated: %s)\n' "$name" "\$version" "\$branch" "\$updated"
-}
-
-SCRIPT
-
-  {
-    # Part 2: embed resolver function (quoted heredoc — no variable expansion)
-    cat <<'RESOLVE'
-# --- embedded from lib/resolve.sh ---
-RESOLVE
-    # Strip the shebang line and inject the function body
-    sed '1{/^#!/d;}' "$REPO_LIB_DIR/resolve.sh"
-    echo '# --- end embedded resolver ---'
-    echo ''
-
-    # Part 3: main dispatch logic
-    cat <<SCRIPT
-
-# --- main ---
-_shiv_check_repo
-export ${caller_pwd_var}="\$PWD"
-_shiv_check_cwd "\$@"
-
-case "\${1:-}" in
-  --help|-h|help)
-    _shiv_handle_help "\${1:-help}"
-    ;;
-  --version)
-    _shiv_handle_version
-    ;;
-  tasks)
-    _shiv_handle_tasks "\$@"
-    ;;
-  *)
-    # --- Default task handling ---
-    # No args: run default task directly.
-    if [ -n "\$DEFAULT_TASK" ] && [ -z "\${1:-}" ]; then
-      _shiv_exec_package_mise run -q "\$DEFAULT_TASK"
-    fi
-
-    # "--" as first arg: explicit disambiguation — send everything
-    # after "--" to the default task.
-    if [ -n "\$DEFAULT_TASK" ] && [ "\${1:-}" = "--" ]; then
-      shift
-      if [ \$# -gt 0 ]; then
-        _shiv_exec_package_mise run -q "\$DEFAULT_TASK" "\$@"
-      else
-        _shiv_exec_package_mise run -q "\$DEFAULT_TASK"
-      fi
-    fi
-
-    # Check if "--" is present in args (user is disambiguating).
-    _shiv_has_dash=false
-    for _shiv_arg in "\$@"; do
-      if [ "\$_shiv_arg" = "--" ]; then
-        _shiv_has_dash=true
-        break
-      fi
-    done
-
-    # Space-to-colon resolution
-    _shiv_ensure_task_map
-    shiv_resolve_task "$name" "\$SHIV_TASK_MAP" "\$@"
-    _shiv_rc=\$?
-    if [ "\$_shiv_rc" -eq 0 ]; then
-      # Resolved a subtask. If a default task also exists and the user
-      # didn't use "--" to disambiguate, this is ambiguous.
-      if [ -n "\$DEFAULT_TASK" ] && [ "\$_shiv_has_dash" = "false" ]; then
-        echo "Ambiguous: '\$*' could be:" >&2
-        echo "  task '\$SHIV_RESOLVED_TASK' with args: \${SHIV_RESOLVED_ARGS[*]:-<none>}" >&2
-        echo "  default task with args: \$*" >&2
-        echo "Use -- to disambiguate:" >&2
-        echo "  $name \${SHIV_RESOLVED_TASK//:/ } -- \${SHIV_RESOLVED_ARGS[*]}     (task '\$SHIV_RESOLVED_TASK')" >&2
-        echo "  $name -- \$*     (default task)" >&2
-        exit 1
-      fi
-      # Guard: only expand SHIV_RESOLVED_ARGS when non-empty.
-      # bash <4.4 treats "\${empty_array[@]}" as unbound under set -u.
-      if [ \${#SHIV_RESOLVED_ARGS[@]} -gt 0 ]; then
-        _shiv_exec_package_mise run -q "\$SHIV_RESOLVED_TASK" "\${SHIV_RESOLVED_ARGS[@]}"
-      else
-        _shiv_exec_package_mise run -q "\$SHIV_RESOLVED_TASK"
-      fi
-    elif [ "\$_shiv_rc" -eq 1 ]; then
-      exit 1  # ambiguous — error already printed to stderr
-    fi
-    # rc=2 or no task map: fall through to default task or mise
-    if [ -n "\$DEFAULT_TASK" ]; then
-      _shiv_exec_package_mise run -q "\$DEFAULT_TASK" "\$@"
-    fi
-    _shiv_exec_package_mise run -q "\$@"
-    ;;
-esac
-SCRIPT
-  } >> "$SHIV_BIN_DIR/$name"
-
-  chmod +x "$SHIV_BIN_DIR/$name"
+# Source fragments are install-time inputs, not runtime dependencies.
+shiv_embed_shim_source() {
+  local source_file="$1"
+  printf '# --- embedded: %s ---\n' "${source_file#"$REPO_LIB_DIR/"}" || return 1
+  sed '1{/^#!/d;}' "$source_file" || return 1
+  printf '\n'
 }
 
 # Create alias symlinks for a package (relative, same directory)
@@ -485,6 +275,27 @@ shiv_create_alias_symlinks() {
   for alias in "${aliases[@]}"; do
     ln -sf "$name" "$SHIV_BIN_DIR/$alias" || return 1
   done
+}
+
+# Compare the generated header as data, never source or eval an installed shim.
+# REPO is followed by DEFAULT_TASK in both current and legacy headers.
+shiv_shim_matches_repo() {
+  local shim_file="$1" expected_repo="$2"
+  local shim_source repo_assignment expected_assignment
+
+  shim_source=$(< "$shim_file") || return 1
+  case "$shim_source" in
+    *$'\nREPO='*$'\nDEFAULT_TASK='*) ;;
+    *) return 1 ;;
+  esac
+
+  repo_assignment=${shim_source#*$'\nREPO='}
+  repo_assignment=${repo_assignment%%$'\nDEFAULT_TASK='*}
+  expected_assignment=$(shiv_shell_quote "$expected_repo") || return 1
+  [ "$repo_assignment" = "$expected_assignment" ] && return 0
+
+  expected_assignment=$(shiv_double_quote_escape "$expected_repo") || return 1
+  [ "$repo_assignment" = "\"$expected_assignment\"" ]
 }
 
 # Refresh every generated artifact for a registered package.

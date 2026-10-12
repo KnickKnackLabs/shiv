@@ -12,4 +12,4 @@ export BATS_DEFAULT_TEST_TARGET="$MISE_CONFIG_ROOT/test"
 export BATS_NUMBER_OF_PARALLEL_JOBS="${BATS_NUMBER_OF_PARALLEL_JOBS:-8}"
 export BATS_PARALLEL_BINARY_NAME="${BATS_PARALLEL_BINARY_NAME:-rush}"
 
-exec bats --print-output-on-failure "$@"
+exec bats --recursive --print-output-on-failure "$@"

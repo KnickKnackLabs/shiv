@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+#MISE description="Emit Bash exports for declared caller settings (source privately; may contain secrets)"
+#USAGE arg "<config>" help="Absolute path to the consuming package's mise.toml"
+#USAGE example "shiv env restore /absolute/path/to/package/mise.toml" header="Emit Bash exports for declared caller settings"
+set -euo pipefail
+
+source "$MISE_CONFIG_ROOT/lib/caller-env.sh"
+source "$MISE_CONFIG_ROOT/lib/env-restore.sh"
+shiv_restore_caller_env "$usage_config"

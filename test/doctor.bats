@@ -134,14 +134,67 @@ run_doctor() {
   [ "$status" -eq 0 ]
 }
 
+@test "doctor: current header handles literal quotes dollars and backslashes" {
+  local repo_dir="$TEST_HOME/space 'quote \"double \$dollar \\slash"
+  mkdir -p "$repo_dir"
+  git -C "$repo_dir" init -q -b main
+  shiv_register "alpha" "$repo_dir"
+  shiv_create_shim "alpha" "$repo_dir"
+
+  run run_doctor
+  [ "$status" -eq 0 ]
+}
+
+@test "doctor: accepts a legacy double-quoted repo header without executing it" {
+  create_installed_package "alpha"
+  local repo_dir="$SHIV_PACKAGES_DIR/alpha"
+  printf '#!/usr/bin/env bash\n# managed by shiv\nREPO="%s"\nDEFAULT_TASK=""\ntouch "%s"\n' \
+    "$repo_dir" "$TEST_HOME/executed" > "$SHIV_BIN_DIR/alpha"
+
+  run run_doctor
+  [ "$status" -eq 0 ]
+  [ ! -e "$TEST_HOME/executed" ]
+}
+
+@test "doctor: rejects executable repo expressions without evaluating them" {
+  create_installed_package "alpha"
+  printf '#!/usr/bin/env bash\n# managed by shiv\nREPO=$(touch "%s")\nDEFAULT_TASK=""\n' \
+    "$TEST_HOME/executed" > "$SHIV_BIN_DIR/alpha"
+
+  run run_doctor
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"shim points to"* ]]
+  [ ! -e "$TEST_HOME/executed" ]
+}
+
+@test "doctor: rejects missing repo metadata" {
+  create_installed_package "alpha"
+  printf '#!/usr/bin/env bash\n# managed by shiv\n' > "$SHIV_BIN_DIR/alpha"
+
+  run run_doctor
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"unreadable repo"* ]]
+}
+
+@test "doctor: rejects legacy paths containing shell expansion syntax" {
+  local repo_dir="$TEST_HOME/\$HOME"
+  mkdir -p "$repo_dir"
+  shiv_register "alpha" "$repo_dir"
+  printf '#!/usr/bin/env bash\n# managed by shiv\nREPO="%s"\nDEFAULT_TASK=""\n' \
+    "$repo_dir" > "$SHIV_BIN_DIR/alpha"
+
+  run run_doctor
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"shim points to"* ]]
+}
+
 # ============================================================================
 # Missing repo
 # ============================================================================
 
 @test "doctor: missing repo shows ✗" {
-  local missing_repo="$TEST_HOME/nonexistent-repo"
-  shiv_register "gone" "$missing_repo"
-  shiv_create_shim "gone" "$missing_repo"
+  create_installed_package "gone"
+  rm -rf "$SHIV_PACKAGES_DIR/gone"
 
   run run_doctor
   [ "$status" -ne 0 ]

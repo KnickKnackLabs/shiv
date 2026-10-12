@@ -261,9 +261,11 @@ else
   echo "Updating $COUNT tool(s)..."
   echo ""
   rc=0
+  registry_entries=$(shiv_registry_entries) || exit 1
   while IFS=$'\t' read -r name _repo _ref; do
+    [ -n "$name" ] || continue
     update_one "$name" false || rc=1
-  done < <(shiv_registry_entries)
+  done <<< "$registry_entries"
 fi
 
 # Summary table (multi-package updates only)

@@ -98,7 +98,9 @@ else
   issue_names=()
   issue_details=()
 
+  registry_entries=$(shiv_registry_entries) || exit 1
   while IFS=$'\t' read -r name repo _ref; do
+    [ -n "$name" ] || continue
     issues=""
     issue_count=0
     repo_usable=true
@@ -126,21 +128,18 @@ else
     fi
 
     if [ -f "$SHIV_BIN_DIR/$name" ]; then
-      shim_repo=""
-      if ! shim_repo=$(shiv_read_generated_repo "$SHIV_BIN_DIR/$name"); then
-        shim_repo=""
-      fi
-      if [ -n "$shim_repo" ] && [ "$shim_repo" != "$repo" ]; then
-        issues+="    ✗ shim points to $shim_repo but registry says $repo"$'\n'
+      if ! shiv_shim_matches_repo "$SHIV_BIN_DIR/$name" "$repo"; then
+        issues+="    ✗ shim points to a different or unreadable repo; registry says $repo"$'\n'
         issue_count=$((issue_count + 1))
         generated_issue=true
       fi
     fi
 
     aliases=()
+    alias_output=$(shiv_registry_aliases "$name") || exit 1
     while IFS= read -r _alias; do
       [ -n "$_alias" ] && aliases+=("$_alias")
-    done < <(shiv_registry_aliases "$name")
+    done <<< "$alias_output"
     for alias in "${aliases[@]}"; do
       if [ ! -L "$SHIV_BIN_DIR/$alias" ]; then
         issues+="    ✗ alias symlink missing at $SHIV_BIN_DIR/$alias"$'\n'
@@ -169,7 +168,7 @@ else
     else
       rows+=("${name}${SEP}✓")
     fi
-  done < <(shiv_registry_entries)
+  done <<< "$registry_entries"
 
   # Package table
   printf '%s\n' "${rows[@]}" | gum table -s "$SEP" -c "PACKAGE,STATUS" -p --border normal
