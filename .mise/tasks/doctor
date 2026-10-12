@@ -98,7 +98,9 @@ else
   issue_names=()
   issue_details=()
 
+  registry_entries=$(shiv_registry_entries) || exit 1
   while IFS=$'\t' read -r name repo _ref; do
+    [ -n "$name" ] || continue
     issues=""
     issue_count=0
     repo_usable=true
@@ -134,9 +136,10 @@ else
     fi
 
     aliases=()
+    alias_output=$(shiv_registry_aliases "$name") || exit 1
     while IFS= read -r _alias; do
       [ -n "$_alias" ] && aliases+=("$_alias")
-    done < <(shiv_registry_aliases "$name")
+    done <<< "$alias_output"
     for alias in "${aliases[@]}"; do
       if [ ! -L "$SHIV_BIN_DIR/$alias" ]; then
         issues+="    ✗ alias symlink missing at $SHIV_BIN_DIR/$alias"$'\n'
@@ -165,7 +168,7 @@ else
     else
       rows+=("${name}${SEP}✓")
     fi
-  done < <(shiv_registry_entries)
+  done <<< "$registry_entries"
 
   # Package table
   printf '%s\n' "${rows[@]}" | gum table -s "$SEP" -c "PACKAGE,STATUS" -p --border normal

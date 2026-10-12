@@ -85,9 +85,8 @@ shiv_latest_release_tag_from_url() {
   local remote_url="$1"
   local tags_output latest
 
-  if ! tags_output=$(git ls-remote --tags "$remote_url" 2>&1); then
-    echo "Error: failed to query release tags for $remote_url" >&2
-    printf '%s\n' "$tags_output" | sed 's/^/  /' >&2
+  if ! tags_output=$(git ls-remote --tags "$remote_url" 2>/dev/null); then
+    echo "Error: failed to query release tags" >&2
     return 2
   fi
 
