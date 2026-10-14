@@ -168,6 +168,7 @@ shiv doctor`}</CodeBlock>
 shiv install notes@latest  # same as bare install
 shiv install notes@main    # track a branch explicitly
 shiv install notes@v0.8.4  # pin an exact tag
+shiv install notes@0.8.4   # same tag, without the v prefix
 shiv install notes@abc1234 # pin an exact commit`}</CodeBlock>
 
       <Paragraph>
